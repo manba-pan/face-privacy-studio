@@ -1,0 +1,11 @@
+name: 功能建议
+description: 说明你想解决的视频处理问题
+title: "[建议] "
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 使用场景与需求
+      description: 你现在如何处理、遇到了什么困难、希望软件怎样帮助你？
+    validations:
+      required: true

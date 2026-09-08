@@ -1,0 +1,106 @@
+"""Build a per-user NSIS installer from the verified PyInstaller folder.
+
+The uninstaller removes only manifest-listed files, never recursively deletes
+the install folder, and therefore preserves videos/projects added by users.
+"""
+from pathlib import Path
+import argparse
+import hashlib
+import subprocess
+
+BASE = Path(__file__).resolve().parent
+VERSION = '0.3.1'
+PAYLOAD = BASE / 'releases' / VERSION / '影像工作台'
+
+
+def nsis(text):
+    return str(text).replace('$', '$$').replace('"', '$\\"')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--makensis', required=True)
+    args = parser.parse_args()
+    files = sorted(p for p in PAYLOAD.rglob('*') if p.is_file())
+    if not (PAYLOAD / '影像工作台.exe').is_file():
+        raise SystemExit('Build Studio.spec and package_studio.py first.')
+    for file in files:
+        name = file.relative_to(PAYLOAD).as_posix().lower()
+        if ('virtualkeyboard' in name or name.endswith(('.mp4', '.mov', '.mkv', '.wav', '.privacy.json'))
+                or any(part in ('samples', 'portable_validation') for part in Path(name).parts)):
+            raise SystemExit('Unexpected installer file: ' + name)
+    build = BASE / 'build' / 'installer'
+    build.mkdir(parents=True, exist_ok=True)
+    target = BASE / 'releases' / f'FacePrivacyStudio-{VERSION}-Setup.exe'
+    lines = [
+        'Unicode true', '!include "MUI2.nsh"', '!include "x64.nsh"',
+        'Name "影像工作台"', f'OutFile "{nsis(target)}"',
+        'InstallDir "$LOCALAPPDATA\\Programs\\FacePrivacyStudio"',
+        'RequestExecutionLevel user', 'SetCompressor /SOLID lzma',
+        'ShowInstDetails show', 'ShowUninstDetails show',
+        f'VIProductVersion "{VERSION}.0"',
+        'VIAddVersionKey "ProductName" "影像工作台"',
+        f'VIAddVersionKey "FileVersion" "{VERSION}"',
+        'VIAddVersionKey "CompanyName" "manba-pan"',
+        'VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 manba-pan"',
+        'VIAddVersionKey "FileDescription" "影像工作台安装程序"',
+        '!define MUI_ABORTWARNING',
+        '!define MUI_WELCOMEPAGE_TITLE "欢迎安装影像工作台"',
+        '!define MUI_WELCOMEPAGE_TEXT "作者：manba-pan$\\r$\\n$\\r$\\n本地人脸打码与视频处理。免费用于个人创作、付费剪辑委托和商业视频。$\\r$\\n$\\r$\\n安装到当前用户目录，不需要安装 Python。"',
+        '!insertmacro MUI_PAGE_WELCOME',
+        f'!insertmacro MUI_PAGE_LICENSE "{nsis(BASE / "LICENSE")}"',
+        '!insertmacro MUI_PAGE_INSTFILES', '!insertmacro MUI_PAGE_FINISH',
+        '!insertmacro MUI_UNPAGE_CONFIRM', '!insertmacro MUI_UNPAGE_INSTFILES',
+        '!insertmacro MUI_LANGUAGE "SimpChinese"',
+        'Function .onInit', '${IfNot} ${RunningX64}',
+        'MessageBox MB_ICONSTOP "本程序需要 Windows x64。"', 'Abort', '${EndIf}',
+        'SetShellVarContext current', 'FunctionEnd',
+        'Section "安装"', 'SetShellVarContext current', 'SetOverwrite ifnewer',
+    ]
+    last_parent = None
+    for file in files:
+        relative = file.relative_to(PAYLOAD)
+        parent = str(relative.parent)
+        if parent != last_parent:
+            suffix = '' if parent == '.' else '\\' + nsis(parent)
+            lines.append(f'SetOutPath "$INSTDIR{suffix}"')
+            last_parent = parent
+        lines.append(f'File "{nsis(file)}"')
+    lines += [
+        'SetOutPath "$INSTDIR"', 'WriteUninstaller "$INSTDIR\\Uninstall.exe"',
+        'CreateShortcut "$DESKTOP\\影像工作台.lnk" "$INSTDIR\\影像工作台.exe"',
+        'CreateDirectory "$SMPROGRAMS\\影像工作台"',
+        'CreateShortcut "$SMPROGRAMS\\影像工作台\\影像工作台.lnk" "$INSTDIR\\影像工作台.exe"',
+        'CreateShortcut "$SMPROGRAMS\\影像工作台\\卸载.lnk" "$INSTDIR\\Uninstall.exe"',
+    ]
+    reg = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FacePrivacyStudio'
+    for key, value in [('DisplayName', '影像工作台'), ('DisplayVersion', VERSION),
+                       ('Publisher', 'manba-pan'), ('InstallLocation', '$INSTDIR'),
+                       ('URLInfoAbout', 'https://github.com/manba-pan/face-privacy-studio')]:
+        lines.append(f'WriteRegStr HKCU "{reg}" "{key}" "{value}"')
+    lines += [f'WriteRegStr HKCU "{reg}" "UninstallString" \'"$INSTDIR\\Uninstall.exe"\'',
+              f'WriteRegDWORD HKCU "{reg}" "NoModify" 1',
+              f'WriteRegDWORD HKCU "{reg}" "NoRepair" 1', 'SectionEnd',
+              'Section "Uninstall"', 'SetShellVarContext current']
+    for file in files:
+        lines.append(f'Delete "$INSTDIR\\{nsis(file.relative_to(PAYLOAD))}"')
+    directories = sorted({p.parent for p in files}, key=lambda p: len(p.parts), reverse=True)
+    for directory in directories:
+        if directory != PAYLOAD:
+            lines.append(f'RMDir "$INSTDIR\\{nsis(directory.relative_to(PAYLOAD))}"')
+    lines += ['Delete "$INSTDIR\\Uninstall.exe"', 'RMDir "$INSTDIR"',
+              'Delete "$DESKTOP\\影像工作台.lnk"',
+              'Delete "$SMPROGRAMS\\影像工作台\\影像工作台.lnk"',
+              'Delete "$SMPROGRAMS\\影像工作台\\卸载.lnk"',
+              'RMDir "$SMPROGRAMS\\影像工作台"', f'DeleteRegKey HKCU "{reg}"',
+              'SectionEnd']
+    script = build / 'FacePrivacyStudio.nsi'
+    script.write_text('\n'.join(lines) + '\n', encoding='utf-8-sig')
+    subprocess.run([args.makensis, '/V2', str(script)], check=True)
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    target.with_suffix('.sha256.txt').write_text(f'{digest}  {target.name}\n', encoding='utf8')
+    print(f'Installer: {target}\nBytes: {target.stat().st_size}\nSHA256: {digest}')
+
+
+if __name__ == '__main__':
+    main()
