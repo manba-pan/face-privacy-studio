@@ -9,7 +9,7 @@ body:
     id: version
     attributes:
       label: 程序版本与 Windows 版本
-      placeholder: "例如：影像工作台 0.3.1，Windows 11 x64"
+      placeholder: "例如：视频一键打码工具 0.3.2，Windows 11 x64"
     validations:
       required: true
   - type: textarea

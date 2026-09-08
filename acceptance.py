@@ -3,9 +3,51 @@ from pathlib import Path
 import hashlib,json,subprocess,time,traceback
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFontDatabase
-from PySide6.QtWidgets import QApplication,QFileDialog
+from PySide6.QtWidgets import QApplication,QFileDialog,QLabel
 from PySide6.QtMultimedia import QMediaPlayer
 import core,exporter
+
+def verify_author_ui(window,out):
+    """Check the actual bundled codes and their rendered/save-original paths."""
+    import cv2,numpy as np
+    from project_info import ProjectDialog,SupportDialog,QRDialog
+    expected={'alipay':'5df5ecbd5cab2dc2dc96344beff0385beef5cf9f18f18c72cdeb4f09085d9c31',
+              'wechat':'e9ce92a5c1d53829b2b2ef8b6e7e28170e992d2e79114f0a8693c7a51893a5c6'}
+    detector=cv2.QRCodeDetector()
+    def decode(path):
+        return detector.detectAndDecode(cv2.imdecode(np.fromfile(path,dtype=np.uint8),cv2.IMREAD_COLOR))[0]
+    assert window.windowTitle().startswith('视频一键打码工具')
+    welcome=ProjectDialog(window,welcome=True)
+    welcome.show();QApplication.processEvents()
+    copy='\n'.join(label.text() for label in welcome.findChildren(QLabel))
+    assert '免费使用，如有商业化等请联系作者\n模型可能漏脸，支持人工复查' in copy
+    welcome.grab().save(str(out/'welcome.png'));welcome.close()
+    support=SupportDialog(window);support.show();QApplication.processEvents()
+    assert len(support.codes)==2
+    support.grab().save(str(out/'support.png'))
+    checks=[]
+    for (name,path,_),label in zip(support.codes,support.qr_labels):
+        digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        assert digest==expected[path.stem],name+' resource changed'
+        payload=decode(path);assert payload
+        rendered=out/(path.stem+'-rendered.png');label.grab().save(str(rendered))
+        assert decode(rendered)==payload,name+' thumbnail does not decode to original'
+        zoom=QRDialog(support,name,path);zoom.show();QApplication.processEvents()
+        full=out/(path.stem+'-full.png')
+        zoom.findChild(QLabel,'fullPaymentCode').grab().save(str(full))
+        assert decode(full)==payload,name+' enlarged code does not decode to original'
+        saved=out/(path.stem+'-saved'+path.suffix)
+        original_dialog=QFileDialog.getSaveFileName
+        try:
+            QFileDialog.getSaveFileName=lambda *_,**__:(str(saved),'')
+            zoom.save_code(name,path)
+        finally:QFileDialog.getSaveFileName=original_dialog
+        assert saved.read_bytes()==path.read_bytes()
+        zoom.close()
+        checks.append({'platform':name,'sha256':digest,'rendered_qr_matches_original':True,'saved_bytes_identical':True})
+    support.close()
+    return checks
+
 
 def run_verification(window,source,out):
     out.mkdir(parents=True,exist_ok=True)
@@ -28,6 +70,8 @@ def run_verification(window,source,out):
             if time.monotonic()-state['started']>180:raise TimeoutError('Packaged acceptance timed out')
             if window.busy:return
             if state['step']==0:
+                state['step']=-1
+                report['author_ui']=verify_author_ui(window,out)
                 state['step']=1;window.import_paths([str(source)])
             elif state['step']==1:
                 c=window.clip;assert c.analysis

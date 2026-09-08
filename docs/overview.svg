@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
+<title id="title">视频一键打码工具</title><desc id="desc">本地视频打码：导入视频、选择遮挡、回看补码、导出成片。</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#111923"/><stop offset="1" stop-color="#1e302b"/></linearGradient></defs>
+<rect width="1200" height="480" rx="24" fill="url(#bg)"/>
+<g font-family="Microsoft YaHei UI,Noto Sans CJK SC,Arial,sans-serif">
+<rect x="46" y="36" width="92" height="27" rx="13" fill="#335a4b"/><text x="66" y="55" fill="#a9f0d4" font-size="13">本地处理</text>
+<text x="155" y="55" fill="#9baebe" font-size="13">BY MANBA-PAN · 0.3.2</text>
+<text x="46" y="131" fill="#f1f8f5" font-size="50" font-weight="700">视频一键打码工具</text>
+<text x="48" y="178" fill="#b9c9d5" font-size="21">人脸可以打码，操作别太烧脑。</text>
+<text x="48" y="220" fill="#86ddbc" font-size="17">整脸 / 半脸 / 眼睛 · 手动补码 · 高清导出</text>
+<text x="48" y="259" fill="#91a4b5" font-size="15">免费用于个人创作、剪辑接单与商业视频制作</text>
+<g transform="translate(793,35)">
+<rect width="357" height="242" rx="16" fill="#111820" stroke="#3f6557"/>
+<rect x="19" y="17" width="63" height="19" rx="9" fill="#355546"/><text x="31" y="31" font-size="11" fill="#a9f0d4">遮挡预览</text>
+<path d="M97 219q8-71 80-71t80 71" fill="#324442"/>
+<ellipse cx="177" cy="108" rx="51" ry="60" fill="#749689"/>
+<rect x="115" y="61" width="126" height="115" rx="14" fill="none" stroke="#78dfbd" stroke-width="2" stroke-dasharray="8 5"/>
+<g transform="translate(115,88)"><rect width="126" height="33" rx="4" fill="#111923"/><path d="M5 5h15v23H5zm25 0h15v12H30zm24 0h14v23H54zm23 12h15v11H77zm23-12h18v23h-18" fill="#658e7d"/></g>
+<text x="128" y="203" font-size="12" fill="#a6c3b6">区域可调 · 强度可调</text>
+</g>
+<g transform="translate(46,325)">
+<g><rect width="252" height="106" rx="12" fill="#1b2630" stroke="#34444e"/><text x="18" y="34" fill="#7cdfbd" font-size="16">01 / 导入视频</text><text x="18" y="69" fill="#bfccd6" font-size="15">拖进来，先让程序找找脸。</text></g>
+<g transform="translate(284,0)"><rect width="252" height="106" rx="12" fill="#1b2630" stroke="#34444e"/><text x="18" y="34" fill="#7cdfbd" font-size="16">02 / 选择遮挡</text><text x="18" y="69" fill="#bfccd6" font-size="15">遮哪儿、遮多厚，你来定。</text></g>
+<g transform="translate(568,0)"><rect width="252" height="106" rx="12" fill="#1b2630" stroke="#34444e"/><text x="18" y="34" fill="#7cdfbd" font-size="16">03 / 回看补码</text><text x="18" y="69" fill="#bfccd6" font-size="15">模型会漏脸，人工来把关。</text></g>
+<g transform="translate(852,0)"><rect width="252" height="106" rx="12" fill="#253c32" stroke="#4e7763"/><text x="18" y="34" fill="#a7f1cf" font-size="16">04 / 导出成片</text><text x="18" y="69" fill="#d2e8dc" font-size="15">新文件保存，原片留在原地。</text></g>
+</g></g></svg>

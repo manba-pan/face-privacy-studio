@@ -31,7 +31,7 @@ BLUE='#2563eb'
 class App:
     def __init__(self,root):
         self.root=root
-        root.title('采访打码助手 · 增强识别版 0.2.1')
+        root.title('视频一键打码工具 · 增强识别版 0.2.1')
         self.ui_scale=max(1.,float(root.tk.call('tk','scaling'))/(96/72))
         sw,sh=root.winfo_screenwidth(),root.winfo_screenheight()
         width=min(sw-80,round(1240*self.ui_scale))
@@ -85,7 +85,7 @@ class App:
         style.configure('TProgressbar',background=BLUE,troughcolor='#e2e8f0',borderwidth=0)
         header=tk.Frame(self.root,bg=INK,padx=24,pady=18)
         header.pack(fill='x')
-        tk.Label(header,text='采访打码助手',font=('Microsoft YaHei UI',21,'bold'),fg='white',bg=INK).pack(side='left')
+        tk.Label(header,text='视频一键打码工具',font=('Microsoft YaHei UI',21,'bold'),fg='white',bg=INK).pack(side='left')
         tk.Label(header,text='增强识别 0.2.1  /  本地处理  /  独立运行',font=('Microsoft YaHei UI',10),fg='#a8bbd8',bg=INK).pack(side='left',padx=22)
         self.open_btn=ttk.Button(header,text='＋ 选择视频',style='Primary.TButton',command=self.open_video)
         self.open_btn.pack(side='right')

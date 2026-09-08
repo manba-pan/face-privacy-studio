@@ -1,54 +1,4 @@
-# 视频一键打码工具
-
-![视频一键打码工具：导入、选择遮挡、回看补码、导出成片](docs/overview.svg)
-
-把“这张脸得挡一下”变成几步能完成的事。**一键开始自动分析，细节仍由你掌控。** 支持整脸、半脸、眼睛遮挡，也能手动画框补码。视频在 Windows 本机处理，不需要账号、会员或其他剪辑软件。
-
-作者：[manba-pan](https://github.com/manba-pan) · [问题反馈](https://github.com/manba-pan/face-privacy-studio/issues) · [使用许可与支持](COMMERCIAL.md)
-
-| 打码有选择 | 原画有交代 | 导出有档位 |
-| --- | --- | --- |
-| 整脸 / 上下半脸 / 眼睛 | 未检测到人脸，默认保留画面 | 保留源尺寸与帧率 |
-| 马赛克 / 模糊 / 实色，强度 1～5 档 | 手动关键帧补码，漏了可以补 | H.264 / ProRes / FFV1 |
-| 覆盖范围、眼睛条高度单独调 | 导出另存新文件，原片不覆盖 | 原音轨直拷，或调整后转 AAC |
-
-**模型可能漏脸，支持人工复查。** 侧脸、遮挡、小脸和运动模糊仍可能漏检，可以回看并手动补码。
-
-**免费剪片，包括接剪辑单、制作广告和商业视频。** 软件本身的销售、收费服务或商业产品集成须事先另行书面授权。项目公开源码，采用自定义许可，非 OSI 标准开源许可；完整条款见 [LICENSE](LICENSE)。
-
-## 从哪里开始
-
-公开版本和下载状态见 [Releases](https://github.com/manba-pan/face-privacy-studio/releases)。EXE 安装包已加入构建流程；其公开附件须先完成 [DISTRIBUTION.md](DISTRIBUTION.md) 中的第三方对应源码核对。没有 EXE 附件时，请按下方“从源码运行”操作，GitHub 自动生成的 Source code ZIP 不是安装包。
-
-完整解压便携 ZIP，运行 `视频一键打码工具.exe`。必须保留 `_internal` 文件夹；不要只复制 exe。可拖入视频，也可把视频拖到 exe 图标上。
-
-新版 **0.3.2** 欢迎页用功能卡片讲清楚怎么用，主界面“作者 / 支持 / 反馈”随时可以打开。启动提示可以关闭，不会每次开工都拦住你寒暄。
-
-![新版欢迎页](docs/welcome.png)
-
-从源码运行、参数说明和导出选择见 [完整使用说明](docs/USAGE.md)。
-
-## 给作者加点续航
-
-觉得省了时间，可以请作者喝杯茶。金额随心，量力而行；**不打赏也不影响任何功能**。发现 Bug、提建议、帮忙测试，也都是支持。
-
-<table>
-<tr><th>支付宝</th><th>微信</th></tr>
-<tr><td><img src="assets/support/alipay.jpg" width="240" alt="作者的支付宝收款码" /></td><td><img src="assets/support/wechat.jpg" width="240" alt="作者的微信收款码" /></td></tr>
-</table>
-
-程序内也能打开和放大收款码、保存原图。付款前请在支付页面核对收款人。这里展示的是作者提供的静态收款码，软件不处理支付信息，打赏也不等于商业分发授权。
-
-## 遇到问题，欢迎来抓虫
-
-[提交问题或建议](https://github.com/manba-pan/face-privacy-studio/issues/new/choose)，写上程序版本、Windows 版本、复现步骤和错误提示即可。请勿公开私密视频；模型抓脸偶尔失手，反馈描述尽量别让作者也跟着盲猜。
-
-授权或其他联系：[2087725636@qq.com](mailto:2087725636@qq.com)。
-
-<details>
-<summary>展开完整操作、画质说明和开发信息</summary>
-
-构建面向 Windows x64。本机 Windows 11 已验证，尚未在另一台实体电脑或 Windows 10 实测。使用 CPU 推理与软件编码，不要求独立显卡。Qt 界面和带声音播放增加了包体积。
+# 使用说明：视频一键打码工具
 
 ## 操作
 
@@ -105,7 +55,7 @@ py -3.12 -m venv .venv
 
 ## 构建与开发
 
-使用上述环境，安装 [NSIS 3.12](https://nsis.sourceforge.io/Download) 后可以生成单个 EXE 安装包。请先阅读 [分发说明](DISTRIBUTION.md)。
+使用上述环境，安装 [NSIS 3.12](https://nsis.sourceforge.io/Download) 后可以生成单个 EXE 安装包。请先阅读 [分发说明](../DISTRIBUTION.md)。
 
 ```text
 python collect_notices.py
@@ -114,18 +64,6 @@ python package_studio.py
 python build_installer.py --makensis "NSIS目录/makensis.exe"
 ```
 
-源码包括程序、模型、第三方声明，不包括环境、构建目录、个人视频、预览与测试输出。参与贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，其中说明贡献授权方式。
+源码包括程序、模型、第三方声明，不包括环境、构建目录、个人视频、预览与测试输出。参与贡献前请阅读 [CONTRIBUTING.md](../CONTRIBUTING.md)，其中说明贡献授权方式。
 
 测试见 `STUDIO_VERIFICATION.md`，原理与优化方向见 `ARCHITECTURE.md`。
-
-## 来源
-
-- [YuNet / OpenCV Zoo](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
-- [MediaPipe Face Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python)
-- [FFmpeg](https://ffmpeg.org/ffmpeg.html)
-- [Qt QMediaPlayer](https://doc.qt.io/qtforpython-6/PySide6/QtMultimedia/QMediaPlayer.html)
-- 布局参考 [DaVinci Resolve](https://www.blackmagicdesign.com/products/davinciresolve/edit) 与 [CapCut Desktop](https://www.capcut.com/tools/desktop-video-editor) 的素材区、监看区、参数区、时间线，未使用其品牌图标或素材。
-
-第三方许可证保留在 `THIRD_PARTY`。捆绑 FFmpeg 自报 GPL v3 或更新版本，Qt/PySide6、模型与其他库分别适用上游条款；项目许可证不替代第三方条款。
-
-</details>

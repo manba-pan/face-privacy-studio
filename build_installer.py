@@ -9,8 +9,8 @@ import hashlib
 import subprocess
 
 BASE = Path(__file__).resolve().parent
-VERSION = '0.3.1'
-PAYLOAD = BASE / 'releases' / VERSION / '影像工作台'
+VERSION = '0.3.2'
+PAYLOAD = BASE / 'releases' / VERSION / '视频一键打码工具'
 
 
 def nsis(text):
@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--makensis', required=True)
     args = parser.parse_args()
     files = sorted(p for p in PAYLOAD.rglob('*') if p.is_file())
-    if not (PAYLOAD / '影像工作台.exe').is_file():
+    if not (PAYLOAD / '视频一键打码工具.exe').is_file():
         raise SystemExit('Build Studio.spec and package_studio.py first.')
     for file in files:
         name = file.relative_to(PAYLOAD).as_posix().lower()
@@ -31,22 +31,22 @@ def main():
             raise SystemExit('Unexpected installer file: ' + name)
     build = BASE / 'build' / 'installer'
     build.mkdir(parents=True, exist_ok=True)
-    target = BASE / 'releases' / f'FacePrivacyStudio-{VERSION}-Setup.exe'
+    target = BASE / 'releases' / f'VideoRedactor-{VERSION}-Setup.exe'
     lines = [
         'Unicode true', '!include "MUI2.nsh"', '!include "x64.nsh"',
-        'Name "影像工作台"', f'OutFile "{nsis(target)}"',
+        'Name "视频一键打码工具"', f'OutFile "{nsis(target)}"',
         'InstallDir "$LOCALAPPDATA\\Programs\\FacePrivacyStudio"',
         'RequestExecutionLevel user', 'SetCompressor /SOLID lzma',
         'ShowInstDetails show', 'ShowUninstDetails show',
         f'VIProductVersion "{VERSION}.0"',
-        'VIAddVersionKey "ProductName" "影像工作台"',
+        'VIAddVersionKey "ProductName" "视频一键打码工具"',
         f'VIAddVersionKey "FileVersion" "{VERSION}"',
         'VIAddVersionKey "CompanyName" "manba-pan"',
         'VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 manba-pan"',
-        'VIAddVersionKey "FileDescription" "影像工作台安装程序"',
+        'VIAddVersionKey "FileDescription" "视频一键打码工具安装程序"',
         '!define MUI_ABORTWARNING',
-        '!define MUI_WELCOMEPAGE_TITLE "欢迎安装影像工作台"',
-        '!define MUI_WELCOMEPAGE_TEXT "作者：manba-pan$\\r$\\n$\\r$\\n本地人脸打码与视频处理。免费用于个人创作、付费剪辑委托和商业视频。$\\r$\\n$\\r$\\n安装到当前用户目录，不需要安装 Python。"',
+        '!define MUI_WELCOMEPAGE_TITLE "欢迎安装视频一键打码工具"',
+        '!define MUI_WELCOMEPAGE_TEXT "视频打码，少一点折腾。$\\r$\\n作者：manba-pan$\\r$\\n$\\r$\\n整脸、半脸、眼睛，选好范围就开工。$\\r$\\n$\\r$\\n自动识别配合手动补码；没有检测到脸时，默认保留原画面。$\\r$\\n$\\r$\\n免费用于个人创作、接剪辑单和商业视频。自愿打赏不影响任何功能。$\\r$\\n$\\r$\\n安装到当前用户目录，不需要安装 Python。"',
         '!insertmacro MUI_PAGE_WELCOME',
         f'!insertmacro MUI_PAGE_LICENSE "{nsis(BASE / "LICENSE")}"',
         '!insertmacro MUI_PAGE_INSTFILES', '!insertmacro MUI_PAGE_FINISH',
@@ -56,6 +56,19 @@ def main():
         'MessageBox MB_ICONSTOP "本程序需要 Windows x64。"', 'Abort', '${EndIf}',
         'SetShellVarContext current', 'FunctionEnd',
         'Section "安装"', 'SetShellVarContext current', 'SetOverwrite ifnewer',
+        # Migrate only the previous product's registered entry point/shortcuts.
+        'ReadRegStr $0 HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FacePrivacyStudio" "DisplayName"',
+        'ReadRegStr $1 HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FacePrivacyStudio" "InstallLocation"',
+        '${If} $0 == "影像工作台"', '${AndIf} $1 == $INSTDIR',
+        'IfFileExists "$INSTDIR\\影像工作台.exe" 0 old_entry_removed',
+        'ClearErrors', 'Delete "$INSTDIR\\影像工作台.exe"',
+        '${If} ${Errors}',
+        'MessageBox MB_ICONSTOP "请先关闭旧版影像工作台，再重新安装。" /SD IDOK',
+        'Abort', '${EndIf}', 'old_entry_removed:',
+        'Delete "$DESKTOP\\影像工作台.lnk"',
+        'Delete "$SMPROGRAMS\\影像工作台\\影像工作台.lnk"',
+        'Delete "$SMPROGRAMS\\影像工作台\\卸载.lnk"',
+        'RMDir "$SMPROGRAMS\\影像工作台"', '${EndIf}',
     ]
     last_parent = None
     for file in files:
@@ -68,13 +81,13 @@ def main():
         lines.append(f'File "{nsis(file)}"')
     lines += [
         'SetOutPath "$INSTDIR"', 'WriteUninstaller "$INSTDIR\\Uninstall.exe"',
-        'CreateShortcut "$DESKTOP\\影像工作台.lnk" "$INSTDIR\\影像工作台.exe"',
-        'CreateDirectory "$SMPROGRAMS\\影像工作台"',
-        'CreateShortcut "$SMPROGRAMS\\影像工作台\\影像工作台.lnk" "$INSTDIR\\影像工作台.exe"',
-        'CreateShortcut "$SMPROGRAMS\\影像工作台\\卸载.lnk" "$INSTDIR\\Uninstall.exe"',
+        'CreateShortcut "$DESKTOP\\视频一键打码工具.lnk" "$INSTDIR\\视频一键打码工具.exe"',
+        'CreateDirectory "$SMPROGRAMS\\视频一键打码工具"',
+        'CreateShortcut "$SMPROGRAMS\\视频一键打码工具\\视频一键打码工具.lnk" "$INSTDIR\\视频一键打码工具.exe"',
+        'CreateShortcut "$SMPROGRAMS\\视频一键打码工具\\卸载.lnk" "$INSTDIR\\Uninstall.exe"',
     ]
     reg = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FacePrivacyStudio'
-    for key, value in [('DisplayName', '影像工作台'), ('DisplayVersion', VERSION),
+    for key, value in [('DisplayName', '视频一键打码工具'), ('DisplayVersion', VERSION),
                        ('Publisher', 'manba-pan'), ('InstallLocation', '$INSTDIR'),
                        ('URLInfoAbout', 'https://github.com/manba-pan/face-privacy-studio')]:
         lines.append(f'WriteRegStr HKCU "{reg}" "{key}" "{value}"')
@@ -89,10 +102,10 @@ def main():
         if directory != PAYLOAD:
             lines.append(f'RMDir "$INSTDIR\\{nsis(directory.relative_to(PAYLOAD))}"')
     lines += ['Delete "$INSTDIR\\Uninstall.exe"', 'RMDir "$INSTDIR"',
-              'Delete "$DESKTOP\\影像工作台.lnk"',
-              'Delete "$SMPROGRAMS\\影像工作台\\影像工作台.lnk"',
-              'Delete "$SMPROGRAMS\\影像工作台\\卸载.lnk"',
-              'RMDir "$SMPROGRAMS\\影像工作台"', f'DeleteRegKey HKCU "{reg}"',
+              'Delete "$DESKTOP\\视频一键打码工具.lnk"',
+              'Delete "$SMPROGRAMS\\视频一键打码工具\\视频一键打码工具.lnk"',
+              'Delete "$SMPROGRAMS\\视频一键打码工具\\卸载.lnk"',
+              'RMDir "$SMPROGRAMS\\视频一键打码工具"', f'DeleteRegKey HKCU "{reg}"',
               'SectionEnd']
     script = build / 'FacePrivacyStudio.nsi'
     script.write_text('\n'.join(lines) + '\n', encoding='utf-8-sig')

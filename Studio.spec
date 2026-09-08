@@ -28,7 +28,7 @@ a.binaries=[entry for entry in a.binaries if 'virtualkeyboard' not in entry[0].l
 a.datas=[entry for entry in a.datas if 'virtualkeyboard' not in entry[0].lower()
          and not entry[0].lower().endswith(('.pyc','.pyo'))]
 pyz=PYZ(a.pure)
-exe=EXE(pyz,a.scripts,[],exclude_binaries=True,name='影像工作台',
+exe=EXE(pyz,a.scripts,[],exclude_binaries=True,name='视频一键打码工具',
     debug=False,bootloader_ignore_signals=False,strip=False,upx=False,console=False,
     disable_windowed_traceback=False)
-coll=COLLECT(exe,a.binaries,a.datas,strip=False,upx=False,name='影像工作台')
+coll=COLLECT(exe,a.binaries,a.datas,strip=False,upx=False,name='视频一键打码工具')

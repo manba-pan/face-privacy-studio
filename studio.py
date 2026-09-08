@@ -223,7 +223,7 @@ class Timeline(QWidget):
 class Studio(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f'影像工作台 {VERSION} · 本地视频处理')
+        self.setWindowTitle(f'视频一键打码工具 {VERSION} · 本地视频处理')
         self.setMinimumSize(1100,720);self.resize(1460,900);self.setAcceptDrops(True)
         self.clips=[];self.current=-1;self.index=0;self.raw=None;self.loading=False
         self.busy=False;self.cancel=threading.Event();self.thread=None;self.callback=None
@@ -242,7 +242,7 @@ class Studio(QMainWindow):
     def clip(self):return self.clips[self.current] if 0<=self.current<len(self.clips) else None
     def build_ui(self):
         root=QWidget();self.setCentralWidget(root);layout=QVBoxLayout(root);layout.setContentsMargins(14,12,14,10);layout.setSpacing(9)
-        top=QHBoxLayout();top.addWidget(label('影像工作台','brand'));top.addSpacing(12)
+        top=QHBoxLayout();top.addWidget(label('视频一键打码工具','brand'));top.addSpacing(12)
         top.addWidget(label(f'by {AUTHOR}  /  {VERSION}','muted'));top.addStretch()
         top.addWidget(button('作者 / 支持 / 反馈',lambda:ProjectDialog(self).exec()))
         self.import_button=button('＋ 导入视频',self.import_dialog);top.addWidget(self.import_button)
@@ -355,7 +355,7 @@ class Studio(QMainWindow):
         self.shortcuts=[]
         for key,slot in [('Space',self.toggle_play),('Left',lambda:self.seek(self.index-1)),('Right',lambda:self.seek(self.index+1)),('I',self.mark_in),('O',self.mark_out),('Ctrl+S',self.save_project),('Ctrl+O',self.import_dialog),('Escape',self.stop_drawing)]:
             shortcut=QShortcut(QKeySequence(key),self);shortcut.activated.connect(slot);self.shortcuts.append(shortcut)
-    def message(self,text):QMessageBox.information(self,'影像工作台',str(text))
+    def message(self,text):QMessageBox.information(self,'视频一键打码工具',str(text))
     def update_actions(self):
         c=self.clip
         for widget in (self.import_button,self.open_project_button,self.remove_button,self.analyze_button,self.batch_button):widget.setEnabled(not self.busy)
@@ -735,7 +735,7 @@ class Studio(QMainWindow):
 def main():
     if sys.stdout is None:sys.stdout=open(os.devnull,'w')
     if sys.stderr is None:sys.stderr=open(os.devnull,'w')
-    app=QApplication(sys.argv);app.setApplicationName('影像工作台');app.setStyle('Fusion');app.setStyleSheet(STYLE)
+    app=QApplication(sys.argv);app.setApplicationName('视频一键打码工具');app.setStyle('Fusion');app.setStyleSheet(STYLE)
     window=Studio();screen=app.primaryScreen().availableGeometry();window.resize(min(1460,screen.width()-60),min(920,screen.height()-60));window.show()
     paths=[p for p in sys.argv[1:] if Path(p).is_file()]
     if '--verify' in sys.argv:

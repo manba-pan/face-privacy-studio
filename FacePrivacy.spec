@@ -12,7 +12,7 @@ a=Analysis([str(base/'app.py')],pathex=[str(base)],
     hookspath=[],hooksconfig={},runtime_hooks=[],
     excludes=['pytest','IPython','jupyter','matplotlib.tests'],noarchive=False)
 pyz=PYZ(a.pure)
-exe=EXE(pyz,a.scripts,[],exclude_binaries=True,name='采访打码助手',
+exe=EXE(pyz,a.scripts,[],exclude_binaries=True,name='视频一键打码工具',
     debug=False,bootloader_ignore_signals=False,strip=False,upx=False,console=False,
     disable_windowed_traceback=False)
-coll=COLLECT(exe,a.binaries,a.datas,strip=False,upx=False,name='采访打码助手')
+coll=COLLECT(exe,a.binaries,a.datas,strip=False,upx=False,name='视频一键打码工具')
