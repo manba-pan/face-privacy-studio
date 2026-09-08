@@ -33,7 +33,8 @@ source=os.environ.get('FACEPRIVACY_ACCEPTANCE_VIDEO',str(Path(__file__).resolve(
 window.import_paths([source]);wait_job();events(200)
 assert window.clip.analysis
 frame=next(i for i,faces in enumerate(window.clip.analysis.faces) if faces and i>window.clip.info.frames*.3)
-window.missing.setCurrentIndex(1);window.seek(frame);events()
+assert window.clip.settings.missing=='keep' and window.missing.currentData()=='keep'
+window.seek(frame);events()
 assert len(window.clip.analysis.faces[frame])>=1
 window.grab().save(str(out/'studio_face.png'))
 window.region.setCurrentIndex(window.region.findData('eyes'));window.strength.setValue(5);events()

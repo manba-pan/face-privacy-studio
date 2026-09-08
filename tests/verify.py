@@ -95,7 +95,9 @@ class Verification(unittest.TestCase):
             low=core.render_frame(rgb,faces,core.Settings(style=style,strength=1))
             high=core.render_frame(rgb,faces,core.Settings(style=style,strength=5))
             self.assertFalse(np.array_equal(low,high))
-        black=core.render_frame(rgb,[],core.Settings())
+        unchanged=core.render_frame(rgb,[],core.Settings())
+        self.assertTrue(np.array_equal(unchanged,rgb))
+        black=core.render_frame(rgb,[],core.Settings(missing='full_frame'))
         self.assertTrue(np.all(black==16))
 
     def test_03_manual_region_timing(self):

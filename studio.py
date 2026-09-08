@@ -302,7 +302,7 @@ class Studio(QMainWindow):
         self.coverage=QDoubleSpinBox();self.coverage.setRange(.75,2.0);self.coverage.setSingleStep(.05);self.coverage.setValue(1.15);self.coverage.setSuffix(' ×');form.addRow('覆盖范围',self.coverage)
         self.eye_height=QDoubleSpinBox();self.eye_height.setRange(.4,3);self.eye_height.setSingleStep(.1);self.eye_height.setValue(1);self.eye_height.setSuffix(' ×');form.addRow('眼睛条高度',self.eye_height);box.addLayout(form)
         box.addWidget(label('未检测到人脸时'))
-        self.missing=combo([('整帧遮黑 · 保守模式','full_frame'),('保留画面 · 请人工检查','keep')]);box.addWidget(self.missing)
+        self.missing=combo([('保留画面 · 请人工检查','keep'),('整帧遮黑 · 保守模式','full_frame')]);box.addWidget(self.missing)
         self.hint(box,'整脸、半脸、眼睛均随五官角度变化。实色遮挡不受强度档位影响。')
         box.addWidget(label('需要回看的片段','heading'));self.review_list=QListWidget();self.review_list.setMinimumHeight(75);self.review_list.setMaximumHeight(160)
         self.review_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

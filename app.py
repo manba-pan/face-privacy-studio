@@ -62,7 +62,7 @@ class App:
         self.strength=tk.IntVar(value=4)
         self.coverage=tk.DoubleVar(value=1.15)
         self.eye_height=tk.DoubleVar(value=1.0)
-        self.missing=tk.StringVar(value='整帧黑色遮挡')
+        self.missing=tk.StringVar(value='保持原画（需检查）')
         self.compare=tk.BooleanVar(value=False)
         self.position=tk.DoubleVar(value=0)
         self.start=tk.StringVar(value='00:00:00.00')

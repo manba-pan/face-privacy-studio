@@ -31,7 +31,8 @@ def run_verification(window,source,out):
                 state['step']=1;window.import_paths([str(source)])
             elif state['step']==1:
                 c=window.clip;assert c.analysis
-                window.missing.setCurrentIndex(1);window.region.setCurrentIndex(window.region.findData('eyes'))
+                assert window.clip.settings.missing=='keep' and window.missing.currentData()=='keep'
+                window.region.setCurrentIndex(window.region.findData('eyes'))
                 window.grab().save(str(out/'packaged-studio.png'))
                 report['checks'].append({'analysis_frames':c.info.frames,'face_frames':sum(bool(f) for f in c.analysis.faces)})
                 state['frame']=window.index;state['play_started']=time.monotonic();window.toggle_play();state['step']=2

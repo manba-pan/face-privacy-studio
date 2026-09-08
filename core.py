@@ -69,7 +69,7 @@ class Settings:
     strength: int = 4
     coverage: float = 1.15
     eye_height: float = 1.0
-    missing: str = 'full_frame'
+    missing: str = 'keep'
 
 
 def probe(path: str) -> VideoInfo:
