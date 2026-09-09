@@ -1,5 +1,7 @@
 # Windows 安装包本地验收（0.4.1）
 
+此页记录历史完整离线包。当前公开的联网安装器验收见 [WEB_INSTALLER_VERIFICATION.md](WEB_INSTALLER_VERIFICATION.md)。
+
 2026-09-09，本机 Windows 11 x64、RX 9070 XT；尚未在另一台实体电脑或 Windows 10 上验证。
 
 - 安装包：VideoRedactor-0.4.1-Setup.exe，166,450,930 字节。
@@ -15,4 +17,4 @@
 
 程序包和源码包使用明确文件清单，未包含视频、私人验收截图、缓存、日志或项目引用文件。公开图片仅为作者授权收款码、无视频的欢迎页和原生功能示意图。
 
-这是本机功能验收记录。公开 EXE 附件仍需落实 [第三方分发资料](DISTRIBUTION.md)，当前二进制仅用于本地验收；GitHub Release 为源码。
+这是完整离线包的本机功能验收记录，该离线包仍只用于本地验收；当前联网安装器的组件获取方式见 [第三方分发资料](DISTRIBUTION.md)。

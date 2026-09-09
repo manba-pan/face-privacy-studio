@@ -24,7 +24,7 @@ samples/
 .env
 .env.*
 publication/
-release_tools/
+!release_tools/Qt-Python-wrapper-sources.zip
 third_party_sources/
 THIRD_PARTY/**/*.py
 THIRD_PARTY/**/*.pyc

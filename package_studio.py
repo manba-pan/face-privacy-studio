@@ -8,6 +8,7 @@ DOCS=['README.md','ARCHITECTURE.md','STUDIO_VERIFICATION.md','LICENSE','COMMERCI
 SOURCE_FILES=['studio.py','core.py','exporter.py','project_info.py','acceptance.py','startup_log.py','app.py','Studio.spec','FacePrivacy.spec',
     'acceleration.py','analysis_engine.py','analysis_cache.py','playback.py','vision_runtime.py',
     'requirements.txt','collect_notices.py','package_studio.py','build_installer.py','.gitignore','.gitattributes',*DOCS,
+    'release_tools/InstallRuntime.ps1','release_tools/runtime-manifest.json','release_tools/Qt-Python-wrapper-sources.zip',
     'tests/verify.py','tests/verify_studio_export.py','tests/studio_ui_smoke.py','tests/verify_analysis.py']
 
 def zip_and_check(target,files):

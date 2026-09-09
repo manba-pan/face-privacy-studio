@@ -18,9 +18,11 @@
 
 ## 从哪里开始
 
-公开版本和下载状态见 [Releases](https://github.com/manba-pan/face-privacy-studio/releases)。EXE 安装包已加入构建流程；其公开附件须先完成 [DISTRIBUTION.md](DISTRIBUTION.md) 中的第三方对应源码核对。没有 EXE 附件时，请按下方“从源码运行”操作，GitHub 自动生成的 Source code ZIP 不是安装包。
+Windows 用户下载 [0.4.1 联网安装 EXE](https://github.com/manba-pan/face-privacy-studio/releases/download/v0.4.1/VideoRedactor-0.4.1-WebSetup.exe)，双击安装即可，不需要手动安装 Python。
 
-完整解压便携 ZIP，运行 `视频一键打码工具.exe`。必须保留 `_internal` 文件夹；不要只复制 exe。可拖入视频，也可把视频拖到 exe 图标上。
+**首次安装需要联网，另下载约 331 MB 的固定版本运行组件**，从官方 Python 软件包源获取并验证 SHA-256。安装完成后通过桌面快捷方式启动，视频在本机离线处理。网络失败可重新运行安装程序，完整且校验通过的下载会复用。支持 Windows 10 22H2 / Windows 11 x64；本机只实测 Windows 11。
+
+所有附件与校验文件见 [Release 页面](https://github.com/manba-pan/face-privacy-studio/releases/tag/v0.4.1)。`WebSetup.exe` 是联网安装包；GitHub 自动生成的 Source code ZIP 是源码。运行组件获取方式见 [分发说明](DISTRIBUTION.md)。
 
 新版 **0.4.1** 欢迎页用功能卡片讲清楚怎么用，主界面“作者 / 支持 / 反馈”随时可以打开。启动提示可以关闭，不会每次开工都拦住你寒暄。
 
@@ -130,7 +132,7 @@ py -3.12 -m venv .venv
 python collect_notices.py
 python -m PyInstaller Studio.spec --noconfirm --distpath releases/0.4.1 --workpath build/studio
 python package_studio.py
-python build_installer.py --makensis "NSIS目录/makensis.exe"
+python build_installer.py --web --makensis "NSIS目录/makensis.exe"
 ```
 
 源码包括程序、模型、第三方声明，不包括环境、构建目录、个人视频、预览与测试输出。参与贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，其中说明贡献授权方式。

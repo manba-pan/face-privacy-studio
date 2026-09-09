@@ -6,6 +6,7 @@ the install folder, and therefore preserves videos/projects added by users.
 from pathlib import Path
 import argparse
 import hashlib
+import json
 import subprocess
 
 BASE = Path(__file__).resolve().parent
@@ -20,6 +21,7 @@ def nsis(text):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--makensis', required=True)
+    parser.add_argument('--web', action='store_true', help='Download pinned Qt/FFmpeg components directly from their official wheel host.')
     args = parser.parse_args()
     files = sorted(p for p in PAYLOAD.rglob('*') if p.is_file())
     if not (PAYLOAD / '视频一键打码工具.exe').is_file():
@@ -31,7 +33,19 @@ def main():
             raise SystemExit('Unexpected installer file: ' + name)
     build = BASE / 'build' / 'installer'
     build.mkdir(parents=True, exist_ok=True)
-    target = BASE / 'releases' / f'VideoRedactor-{VERSION}-Setup.exe'
+    remote = set()
+    if args.web:
+        manifest = json.loads((BASE/'release_tools'/'runtime-manifest.json').read_text(encoding='utf8'))
+        if manifest['version'] != VERSION: raise SystemExit('Runtime manifest version mismatch')
+        for package in manifest['packages']:
+            for item in package['files']:
+                source = PAYLOAD/item['path']
+                if hashlib.sha256(source.read_bytes()).hexdigest() != item['sha256']:
+                    raise SystemExit('Runtime payload mismatch: '+item['path'])
+                remote.add(item['path'])
+        helper = build/'InstallRuntime.ps1'
+        helper.write_text((BASE/'release_tools'/'InstallRuntime.ps1').read_text(encoding='utf-8-sig'),encoding='utf-8-sig')
+    target = BASE / 'releases' / f'VideoRedactor-{VERSION}-{"WebSetup" if args.web else "Setup"}.exe'
     lines = [
         'Unicode true', '!include "MUI2.nsh"', '!include "x64.nsh"',
         'Name "视频一键打码工具"', f'OutFile "{nsis(target)}"',
@@ -70,15 +84,33 @@ def main():
         'Delete "$SMPROGRAMS\\影像工作台\\卸载.lnk"',
         'RMDir "$SMPROGRAMS\\影像工作台"', '${EndIf}',
     ]
+    if args.web:
+        lines = [line.replace('欢迎安装视频一键打码工具', '视频一键打码工具 · 联网安装') for line in lines]
+        lines = [line if not line.startswith('!define MUI_WELCOMEPAGE_TEXT') else
+            '!define MUI_WELCOMEPAGE_TEXT "首次安装需要联网。$\\r$\\n将从官方 Python 软件包源下载约 331 MB 的运行组件，并校验固定版本和 SHA-256。$\\r$\\n$\\r$\\n不需要手动安装 Python。安装后可以离线处理视频，素材不会上传。$\\r$\\n$\\r$\\n识别仍可能漏检或误检，请人工检查成片。$\\r$\\n作者：manba-pan"' for line in lines]
+        lines += ['InitPluginsDir', 'SetOutPath "$PLUGINSDIR"',
+            f'File /oname=InstallRuntime.ps1 "{nsis(helper)}"',
+            f'File /oname=runtime-manifest.json "{nsis(BASE/"release_tools"/"runtime-manifest.json")}"',
+            'DetailPrint "正在下载并校验官方运行组件，首次安装约需下载 331 MB。"',
+            '''nsExec::ExecToLog '\"$WINDIR\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"$PLUGINSDIR\\InstallRuntime.ps1\" -InstallDir \"$INSTDIR\" -Manifest \"$PLUGINSDIR\\runtime-manifest.json\"' ''',
+            'Pop $0', '${If} $0 != 0',
+            'MessageBox MB_ICONSTOP "运行组件未安装完成。请检查网络、关闭正在运行的本工具后重试；详细原因见安装日志。" /SD IDOK',
+            'Abort', '${EndIf}']
     last_parent = None
     for file in files:
         relative = file.relative_to(PAYLOAD)
+        if relative.as_posix() in remote: continue
         parent = str(relative.parent)
         if parent != last_parent:
             suffix = '' if parent == '.' else '\\' + nsis(parent)
             lines.append(f'SetOutPath "$INSTDIR{suffix}"')
             last_parent = parent
-        lines.append(f'File "{nsis(file)}"')
+        actual = BASE/relative if args.web and relative.as_posix() in ('DISTRIBUTION.md','README.md') else file
+        lines.append(f'File "{nsis(actual)}"')
+    if args.web:
+        lines += ['SetOutPath "$INSTDIR"',
+            f'File /oname=setup-runtime-manifest.json "{nsis(BASE/"release_tools"/"runtime-manifest.json")}"',
+            f'File "{nsis(BASE/"release_tools"/"Qt-Python-wrapper-sources.zip")}"']
     lines += [
         'SetOutPath "$INSTDIR"', 'WriteUninstaller "$INSTDIR\\Uninstall.exe"',
         'CreateShortcut "$DESKTOP\\视频一键打码工具.lnk" "$INSTDIR\\视频一键打码工具.exe"',
@@ -97,6 +129,8 @@ def main():
               'Section "Uninstall"', 'SetShellVarContext current']
     for file in files:
         lines.append(f'Delete "$INSTDIR\\{nsis(file.relative_to(PAYLOAD))}"')
+    if args.web:
+        lines += ['Delete "$INSTDIR\\setup-runtime-manifest.json"','Delete "$INSTDIR\\Qt-Python-wrapper-sources.zip"']
     directories = sorted({p.parent for p in files}, key=lambda p: len(p.parts), reverse=True)
     for directory in directories:
         if directory != PAYLOAD:
@@ -107,7 +141,7 @@ def main():
               'Delete "$SMPROGRAMS\\视频一键打码工具\\卸载.lnk"',
               'RMDir "$SMPROGRAMS\\视频一键打码工具"', f'DeleteRegKey HKCU "{reg}"',
               'SectionEnd']
-    script = build / 'FacePrivacyStudio.nsi'
+    script = build / ('FacePrivacyStudio-Web.nsi' if args.web else 'FacePrivacyStudio.nsi')
     script.write_text('\n'.join(lines) + '\n', encoding='utf-8-sig')
     subprocess.run([args.makensis, '/V2', str(script)], check=True)
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
