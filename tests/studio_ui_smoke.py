@@ -31,10 +31,15 @@ def wait_job():
 events();window.grab().save(str(out/'studio_empty.png'))
 source=os.environ.get('FACEPRIVACY_ACCEPTANCE_VIDEO',str(Path(__file__).resolve().parents[1]/'samples'/'测试采访_带声音.mp4'))
 window.import_paths([source]);wait_job();events(200)
+assert window.clip.analysis is None,'Import must not trigger analysis'
+window.audio.setMuted(True);window.toggle_play();events(800)
+assert window.index>0,'Original video did not play before analysis'
+assert window.monitor.currentWidget()==window.native_video
+window.player.pause();window.analyze_current();wait_job();events(250)
 assert window.clip.analysis
 frame=next(i for i,faces in enumerate(window.clip.analysis.faces) if faces and i>window.clip.info.frames*.3)
 assert window.clip.settings.missing=='keep' and window.missing.currentData()=='keep'
-window.seek(frame);events()
+window.seek(frame);events(350)
 assert len(window.clip.analysis.faces[frame])>=1
 window.grab().save(str(out/'studio_face.png'))
 window.region.setCurrentIndex(window.region.findData('eyes'));window.strength.setValue(5);events()
@@ -55,9 +60,14 @@ assert window.clip.manual[0]['keyframes'][0]['frame']==key
 window.rotation.setCurrentIndex(1);events();window.grab().save(str(out/'studio_manual.png'))
 project=out/'ui_test.privacy.json';project.write_text(json.dumps(window.project_data(),ensure_ascii=False),encoding='utf8')
 window.load_project(str(project));wait_job();events()
+assert window.clip.analysis is None,'Opening a project must not launch analysis'
+window.analyze_current();wait_job();events(250)
 assert window.clip.options.rotation==90 and len(window.clip.manual[0]['keyframes'])==2
 assert window.clip.options.start_frame==start and window.clip.options.end_frame==end
 window.tabs.setCurrentIndex(window.tabs.count()-1);window.grab().save(str(out/'studio_export.png'))
 assert not errors,errors
 window.close();events()
+from shiboken6 import delete
+delete(window);events()
+faulthandler.cancel_dump_traceback_later()
 print('UI passed: analysis, face/eye preview, audible media track, playback frames, range, manual keys, project roundtrip, own-widget screenshots.')

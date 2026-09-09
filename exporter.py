@@ -16,6 +16,7 @@ import re
 import cv2
 import numpy as np
 import core
+import acceleration
 
 PROFILES={
     'quality':('高质量 · H.264','mp4','CRF 14，兼顾清晰度与兼容性。'),
@@ -35,6 +36,8 @@ class ExportOptions:
     rotation:int=0
     volume:float=1.0
     auto_mask:bool=True
+    encoder:str='cpu'
+    decode:str='cpu'
 
 
 def details(path):
@@ -69,6 +72,7 @@ def geometry(info,options):
 
 
 def validate(info,options,media):
+    if options.encoder not in ('cpu','auto','amf','nvenc','qsv') or options.decode not in ('cpu','auto'):raise ValueError('导出硬件选项无效。')
     if media['hdr']:
         raise ValueError('当前颜色处理面向 SDR。HDR / HLG / PQ 素材请先做受控的 SDR 转换；本版不会把它悄悄当作 SDR 导出。')
     if options.profile not in PROFILES:
@@ -149,6 +153,7 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
     info=analysis.info
     media=media or details(info.path)
     end=validate(info,options,media)
+    if options.auto_mask and (not analysis.completed or len(analysis.faces)<end):raise ValueError('人脸识别尚未完成，请继续分析后导出。')
     source,dest=Path(info.path).resolve(),Path(destination).resolve()
     if dest==source or dest.exists():
         raise ValueError('请使用一个尚不存在的新文件名，已有文件不会被覆盖。')
@@ -175,6 +180,15 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
     complete=False
     try:
         profile=options.profile
+        encoder_key='cpu'
+        if profile in ('quality','compact') and options.encoder!='cpu':
+            candidates=['amf','nvenc','qsv'] if options.encoder=='auto' else [options.encoder]
+            for key in candidates:
+                core.check_cancel(cancel)
+                if acceleration.test_encoder(core.ffmpeg(),key)['available']:encoder_key=key;break
+        if hasattr(analysis,'stats'):
+            analysis.stats['export_encoder']=acceleration.ENCODER_LABELS[encoder_key]
+            analysis.stats['export_fallback']=profile in ('quality','compact') and options.encoder!='cpu' and encoder_key=='cpu'
         filters=['pad=ceil(iw/2)*2:ceil(ih/2)*2','setsar=1']
         if options.fps and abs(options.fps-info.fps)>.001:
             filters.append(f'fps={rate_text}')
@@ -188,6 +202,7 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
                 if profile=='prores' else
                 ['-c:v','libx264','-preset','medium' if profile=='quality' else 'fast',
                  '-crf','14' if profile=='quality' else '18','-pix_fmt','yuv420p'])
+            if encoder_key!='cpu':video=[*acceleration.ENCODER_ARGS[encoder_key],'-pix_fmt','yuv420p']
             video+=['-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv']
         command=[core.ffmpeg(),'-hide_banner','-loglevel','error','-nostdin','-y',
             '-f','rawvideo','-pixel_format',pixel,'-video_size',f'{ow}x{oh}',
@@ -213,8 +228,10 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
             command+=['-movflags','+faststart']
         encoder=subprocess.Popen(command+[str(temp)],stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,stderr=errors,creationflags=core.HIDDEN)
+        decode_args,decode_label=acceleration.decoder_args(core.ffmpeg(),info.path,options.decode)
+        if hasattr(analysis,'stats'):analysis.stats['export_decoder']=decode_label
         decoder=subprocess.Popen([core.ffmpeg(),'-hide_banner','-loglevel','error','-nostdin',
-            '-i',info.path,'-map','0:v:0','-an','-sn','-dn','-vf',
+            *decode_args,'-i',info.path,'-map','0:v:0','-an','-sn','-dn','-vf',
             f'fps={info.fps_text},trim=start_frame={options.start_frame}:end_frame={end},setpts=PTS-STARTPTS,scale={w}:{h},setsar=1',
             '-fps_mode','passthrough','-pix_fmt',pixel,'-f','rawvideo','pipe:1'],stdout=subprocess.PIPE,stderr=dec_errors,creationflags=core.HIDDEN)
         nbytes=w*h*3*dtype.itemsize

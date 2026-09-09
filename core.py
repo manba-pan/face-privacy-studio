@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from fractions import Fraction
 from typing import Callable
 
@@ -96,21 +96,36 @@ def fit_size(w, h, limit=960):
 
 class Decoder:
     """FFmpeg normalizes VFR to a CFR timeline shared by analysis and export."""
-    def __init__(self, info, size=None):
+    def __init__(self, info, size=None, hardware='cpu', start_frame=0, cancel=None):
         self.info = info
         self.w, self.h = size or (info.width, info.height)
         self.errors = tempfile.TemporaryFile()
+        from acceleration import decoder_args
+        acceleration,self.backend=decoder_args(ffmpeg(),info.path,hardware)
+        filters=f'fps={info.fps_text}'
+        if start_frame:filters+=f',trim=start_frame={start_frame},setpts=PTS-STARTPTS'
+        filters+=f',scale={self.w}:{self.h},setsar=1'
         self.proc = subprocess.Popen([
             ffmpeg(), '-hide_banner', '-loglevel', 'error', '-nostdin',
-            '-i', info.path, '-map', '0:v:0', '-an', '-sn', '-dn',
-            '-vf', f'fps={info.fps_text},scale={self.w}:{self.h},setsar=1',
-            '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'],
+            *acceleration,'-i', info.path, '-map', '0:v:0', '-an', '-sn', '-dn',
+            '-vf', filters,
+            '-fps_mode', 'passthrough', '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'],
             stdout=subprocess.PIPE, stderr=self.errors, creationflags=HIDDEN)
+        self.cancel=cancel;self.watch_stop=threading.Event();self.watcher=None
+        if cancel is not None:
+            def watch():
+                while not self.watch_stop.wait(.1):
+                    if cancel.is_set():
+                        try:self.proc.kill()
+                        except OSError:pass
+                        return
+            self.watcher=threading.Thread(target=watch,daemon=True);self.watcher.start()
 
     def __iter__(self):
         n = self.w*self.h*3
         while True:
             data = self.proc.stdout.read(n)
+            check_cancel(self.cancel)
             if not data:
                 rc = self.proc.wait()
                 if rc:
@@ -122,6 +137,7 @@ class Decoder:
             yield np.frombuffer(data, np.uint8).reshape(self.h,self.w,3).copy()
 
     def close(self):
+        self.watch_stop.set()
         if self.proc.poll() is None:
             self.proc.terminate()
         try:
@@ -131,6 +147,7 @@ class Decoder:
             self.proc.wait()
         self.proc.stdout.close()
         self.errors.close()
+        if self.watcher:self.watcher.join(timeout=1)
 
     def __enter__(self):
         return self
@@ -257,13 +274,17 @@ class Analysis:
     review: list
     fingerprint: tuple
     preview_path: str = ''
+    completed: bool = True
+    stats: dict = field(default_factory=dict)
 
     def close(self):
+        if hasattr(self.faces,'close'):self.faces.close()
         if self.preview_path:
             Path(self.preview_path).unlink(missing_ok=True)
 
 
 def read_preview(analysis, index):
+    if not analysis.preview_path:return read_frame(analysis.info,index)
     cap=cv2.VideoCapture(analysis.preview_path)
     try:
         cap.set(cv2.CAP_PROP_POS_FRAMES,index)

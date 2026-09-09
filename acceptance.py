@@ -7,6 +7,19 @@ from PySide6.QtWidgets import QApplication,QFileDialog,QLabel
 from PySide6.QtMultimedia import QMediaPlayer
 import core,exporter
 
+def verification_loop(app,window,source,out):
+    import faulthandler
+    from shiboken6 import delete
+    out.mkdir(parents=True,exist_ok=True)
+    with (out/'lifecycle.log').open('w',encoding='utf8') as trace:
+        faulthandler.enable(trace);faulthandler.dump_traceback_later(25,repeat=True,file=trace)
+        run_verification(window,source,out)
+        result=app.exec();trace.write('event loop exited\n');trace.flush()
+        delete(window);app.processEvents();trace.write('Qt window destroyed\n');trace.flush()
+        faulthandler.cancel_dump_traceback_later();faulthandler.disable()
+    return result
+
+
 def verify_author_ui(window,out):
     """Check the actual bundled codes and their rendered/save-original paths."""
     import cv2,numpy as np
@@ -63,7 +76,9 @@ def run_verification(window,source,out):
         if error:report['error']=str(error)
         else:report['passed']=True
         (out/'packaged-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
-        window.close();QApplication.instance().exit(0 if report['passed'] else 1)
+        with (out/'lifecycle.log').open('a',encoding='utf8') as trace:
+            trace.write('closing window\n');trace.flush();window.close();trace.write('window closed\n');trace.flush()
+        QApplication.instance().exit(0 if report['passed'] else 1)
     def tick():
         try:
             if errors:raise RuntimeError(errors)
@@ -74,11 +89,21 @@ def run_verification(window,source,out):
                 report['author_ui']=verify_author_ui(window,out)
                 state['step']=1;window.import_paths([str(source)])
             elif state['step']==1:
-                c=window.clip;assert c.analysis
+                c=window.clip;assert c and c.analysis is None,'Import started analysis'
+                state['step']=10;state['raw_started']=time.monotonic();window.toggle_play()
+            elif state['step']==10:
+                if time.monotonic()-state['raw_started']<.8:return
+                assert window.index>0 and window.clip.analysis is None
+                assert window.monitor.currentWidget()==window.native_video
+                report['checks'].append({'import_without_analysis':True,'native_original_preview':True})
+                window.player.pause();state['step']=11;window.analyze_current()
+            elif state['step']==11:
+                c=window.clip;assert c.analysis and c.analysis.completed
                 assert window.clip.settings.missing=='keep' and window.missing.currentData()=='keep'
                 window.region.setCurrentIndex(window.region.findData('eyes'))
                 window.grab().save(str(out/'packaged-studio.png'))
                 report['checks'].append({'analysis_frames':c.info.frames,'face_frames':sum(bool(f) for f in c.analysis.faces)})
+                report['acceleration']=c.analysis.stats
                 state['frame']=window.index;state['play_started']=time.monotonic();window.toggle_play();state['step']=2
             elif state['step']==2:
                 if time.monotonic()-state['play_started']<.7:return

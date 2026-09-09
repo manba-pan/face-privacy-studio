@@ -4,7 +4,7 @@
 <rect width="1200" height="480" rx="24" fill="url(#bg)"/>
 <g font-family="Microsoft YaHei UI,Noto Sans CJK SC,Arial,sans-serif">
 <rect x="46" y="36" width="92" height="27" rx="13" fill="#335a4b"/><text x="66" y="55" fill="#a9f0d4" font-size="13">本地处理</text>
-<text x="155" y="55" fill="#9baebe" font-size="13">BY MANBA-PAN · 0.3.2</text>
+<text x="155" y="55" fill="#9baebe" font-size="13">BY MANBA-PAN · 0.4.0</text>
 <text x="46" y="131" fill="#f1f8f5" font-size="50" font-weight="700">视频一键打码工具</text>
 <text x="48" y="178" fill="#b9c9d5" font-size="21">人脸可以打码，操作别太烧脑。</text>
 <text x="48" y="220" fill="#86ddbc" font-size="17">整脸 / 半脸 / 眼睛 · 手动补码 · 高清导出</text>

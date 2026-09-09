@@ -12,12 +12,13 @@ os.environ['PATH']=os.pathsep.join([sys.base_prefix,str(Path(sys.base_prefix)/'D
     str(Path(PySide6.__file__).parent),str(windows/'System32'),str(windows)])
 mp_data,mp_bins,mp_hidden=collect_all('mediapipe')
 ff_data,ff_bins,ff_hidden=collect_all('imageio_ffmpeg')
+ort_data,ort_bins,ort_hidden=collect_all('onnxruntime')
 a=Analysis([str(base/'studio.py')],pathex=[str(base)],
-    binaries=mp_bins+ff_bins,
-    datas=mp_data+ff_data+[(str(base/'models'),'models'),(str(base/'assets'),'assets'),(str(base/'THIRD_PARTY'),'THIRD_PARTY')],
-    hiddenimports=mp_hidden+ff_hidden,
+    binaries=mp_bins+ff_bins+ort_bins,
+    datas=mp_data+ff_data+ort_data+[(str(base/'models'),'models'),(str(base/'assets'),'assets'),(str(base/'THIRD_PARTY'),'THIRD_PARTY')],
+    hiddenimports=mp_hidden+ff_hidden+ort_hidden,
     hookspath=[],hooksconfig={},runtime_hooks=[str(base/'startup_log.py')],
-    excludes=['tkinter','pytest','IPython','jupyter','matplotlib.tests','PySide6.QtWebEngineCore','PySide6.QtWebEngineWidgets','PySide6.QtQml','PySide6.QtQuick'],noarchive=False)
+    excludes=['tkinter','pytest','IPython','jupyter','onnx','sounddevice','_sounddevice_data','matplotlib.tests','PySide6.QtWebEngineCore','PySide6.QtWebEngineWidgets','PySide6.QtQml','PySide6.QtQuick'],noarchive=False)
 # Windows supplies its ICU API. A conda/poppler ICU DLL with the same basename
 # exports version-suffixed symbols and must never replace the system library.
 a.binaries=[entry for entry in a.binaries if Path(entry[0]).name.lower() not in ('icuuc.dll','icudt78.dll')]

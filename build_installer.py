@@ -9,7 +9,7 @@ import hashlib
 import subprocess
 
 BASE = Path(__file__).resolve().parent
-VERSION = '0.3.2'
+VERSION = '0.4.0'
 PAYLOAD = BASE / 'releases' / VERSION / '视频一键打码工具'
 
 

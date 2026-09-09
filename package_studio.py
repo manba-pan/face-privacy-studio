@@ -2,12 +2,13 @@
 from pathlib import Path
 import hashlib,shutil,zipfile,json
 BASE=Path(__file__).parent
-VERSION='0.3.2'
+VERSION='0.4.0'
 RELEASE=BASE/'releases'/VERSION/'视频一键打码工具'
 DOCS=['README.md','ARCHITECTURE.md','STUDIO_VERIFICATION.md','LICENSE','COMMERCIAL.md','CONTRIBUTING.md','DISTRIBUTION.md']
 SOURCE_FILES=['studio.py','core.py','exporter.py','project_info.py','acceptance.py','startup_log.py','app.py','Studio.spec','FacePrivacy.spec',
+    'acceleration.py','analysis_engine.py','analysis_cache.py','playback.py','vision_runtime.py',
     'requirements.txt','collect_notices.py','package_studio.py','build_installer.py','.gitignore','.gitattributes',*DOCS,
-    'tests/verify.py','tests/verify_studio_export.py','tests/studio_ui_smoke.py']
+    'tests/verify.py','tests/verify_studio_export.py','tests/studio_ui_smoke.py','tests/verify_analysis.py']
 
 def zip_and_check(target,files):
     with zipfile.ZipFile(target,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
