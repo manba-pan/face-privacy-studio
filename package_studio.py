@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib,shutil,zipfile,json
 BASE=Path(__file__).parent
-VERSION='0.4.0'
+VERSION='0.4.1'
 RELEASE=BASE/'releases'/VERSION/'视频一键打码工具'
 DOCS=['README.md','ARCHITECTURE.md','STUDIO_VERIFICATION.md','LICENSE','COMMERCIAL.md','CONTRIBUTING.md','DISTRIBUTION.md']
 SOURCE_FILES=['studio.py','core.py','exporter.py','project_info.py','acceptance.py','startup_log.py','app.py','Studio.spec','FacePrivacy.spec',

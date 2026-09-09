@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QFrame, QHBoxLay
                               QLabel, QMessageBox, QPushButton, QScrollArea,
                               QVBoxLayout, QWidget)
 
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 AUTHOR = 'manba-pan'
 EMAIL = '2087725636@qq.com'
 PROJECT_URL = 'https://github.com/manba-pan/face-privacy-studio'

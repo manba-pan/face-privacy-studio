@@ -6,8 +6,10 @@
 | 方案 | 做法 | 适用情况 |
 | --- | --- | --- |
 | 快速 | 640 尺寸找脸，检测间帧用短时光流跟踪，近似五官位置 | 先粗看长片，复杂转头和眼部遮挡需多检查 |
-| 均衡（默认） | 两种尺度逐帧找脸，局部五官定位，短暂漏检补偿 | 普通视频的日常选择 |
-| 细致 | 更多尺度、镜像复检、第二种检测模型，更保守的整脸轮廓 | 侧脸、画面边缘和部分遮挡，可能增加误检和耗时 |
+| 均衡（默认） | 两种尺度逐帧找脸，局部五官定位，低置信度候选复核 | 普通视频的日常选择 |
+| 细致 | 更多尺度、镜像及第二模型复检，额外候选需验证，轮廓贴合面部 | 侧脸、画面边缘和部分遮挡，可能增加误检和耗时 |
+
+0.4.1 已取消检测失败后的自动延续，避免把旧脸框拖到手、身体或下一个镜头。快速档只在两次检测之间做短时跟踪；完整检测发现无脸就停止。五官定位成功时使用面部轮廓，覆盖范围只放大一次。低置信度候选需交叉验证，可能让部分困难侧脸进入人工复查。
 
 三种方案都可能漏脸，不能把“细致”理解成保证全遮住。整脸默认覆盖面部，不会自动把整个头部、耳朵或身体遮住。转头只剩后脑、脸被裁出画面时，可加手动框并设置关键帧。
 
@@ -76,7 +78,7 @@ py -3.12 -m venv .venv
 
 ```text
 python collect_notices.py
-python -m PyInstaller Studio.spec --noconfirm --distpath releases/0.4.0 --workpath build/studio
+python -m PyInstaller Studio.spec --noconfirm --distpath releases/0.4.1 --workpath build/studio
 python package_studio.py
 python build_installer.py --makensis "NSIS目录/makensis.exe"
 ```
