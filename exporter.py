@@ -17,12 +17,15 @@ import cv2
 import numpy as np
 import core
 import acceleration
+import color_management as colors
+import native_export
 
 PROFILES={
+    'native':('源像素无损 · FFV1','mkv','完整原片、原尺寸、原色彩；未遮挡样本原样保留，保存前逐帧校验。'),
     'quality':('高质量 · H.264','mp4','CRF 14，兼顾清晰度与兼容性。'),
     'compact':('均衡体积 · H.264','mp4','CRF 18，适合日常分享。'),
     'prores':('后期中间片 · ProRes HQ','mov','10 位 4:2:2 编码，适合继续剪辑，文件较大。'),
-    'lossless':('无损编码 · FFV1','mkv','无损保存处理后的 RGB 画面，文件很大。')}
+    'lossless':('RGB 无损编码 · FFV1','mkv','无损保存转换、缩放或旋转后的 RGB；不保证与源 YUV 样本一致。')}
 
 
 @dataclass
@@ -38,18 +41,13 @@ class ExportOptions:
     auto_mask:bool=True
     encoder:str='cpu'
     decode:str='cpu'
+    input_color:str='auto'
+    input_range:str='auto'
+    output_color:str='preserve'
 
 
 def details(path):
-    r=subprocess.run([core.ffmpeg(),'-hide_banner','-i',str(path)],capture_output=True,creationflags=core.HIDDEN)
-    text=r.stderr.decode('utf8','replace')
-    video=next((line for line in text.splitlines() if 'Video:' in line),'')
-    audio=next((line for line in text.splitlines() if 'Audio:' in line),'')
-    match=re.search(r'Audio:\s*([\w]+)',audio)
-    return {'audio_codec':match.group(1) if match else '',
-            'hdr':any(tag in video for tag in ['smpte2084','arib-std-b67','bt2020']),
-            'ten_bit':bool(re.search(r'(?:yuv\w*|gbr\w*)p(?:10|12|16)',video)),
-            'video_description':video.strip(),'audio_description':audio.strip()}
+    return colors.probe(path)
 
 
 def suffix_for(options,media):
@@ -73,8 +71,7 @@ def geometry(info,options):
 
 def validate(info,options,media):
     if options.encoder not in ('cpu','auto','amf','nvenc','qsv') or options.decode not in ('cpu','auto'):raise ValueError('导出硬件选项无效。')
-    if media['hdr']:
-        raise ValueError('当前颜色处理面向 SDR。HDR / HLG / PQ 素材请先做受控的 SDR 转换；本版不会把它悄悄当作 SDR 导出。')
+    colors.validate(media,options)
     if options.profile not in PROFILES:
         raise ValueError('未知导出预设。')
     if options.rotation not in (0,90,180,270):
@@ -94,6 +91,7 @@ def validate(info,options,media):
         raise ValueError('导出区间无效。')
     if media['ten_bit'] and options.profile in ('quality','compact'):
         raise ValueError('此素材为高于 8 位的 SDR。请选择 ProRes HQ 或 FFV1，避免降为 8 位。')
+    if options.profile=='native':native_export.validate(info,options,media)
     return end
 
 
@@ -161,6 +159,8 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
         raise ValueError('目标文件扩展名与当前预设不一致。')
     if analysis.fingerprint!=core.fingerprint(source):
         raise ValueError('源视频已变化，请重新分析。')
+    if options.profile=='native':
+        return native_export.export(analysis,destination,settings,options,manual,cancel,progress,media)
     w,h=geometry(info,options)
     ow,oh=(h,w) if options.rotation in (90,270) else (w,h)
     duration=(end-options.start_frame)/info.fps
@@ -189,21 +189,23 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
         if hasattr(analysis,'stats'):
             analysis.stats['export_encoder']=acceleration.ENCODER_LABELS[encoder_key]
             analysis.stats['export_fallback']=profile in ('quality','compact') and options.encoder!='cpu' and encoder_key=='cpu'
-        filters=['pad=ceil(iw/2)*2:ceil(ih/2)*2','setsar=1']
+        filters=['setsar=1']
+        if profile!='lossless':filters.insert(0,'pad=ceil(iw/2)*2:ceil(ih/2)*2')
         if options.fps and abs(options.fps-info.fps)>.001:
             filters.append(f'fps={rate_text}')
         if profile=='lossless':
             video=['-c:v','ffv1','-level','3','-coder','1','-context','1',
                    '-pix_fmt','gbrp16le' if high_depth else 'bgr0']
+            video+=colors.output_tags(media,options,rgb=True)
         else:
-            # Explicit matrix/range and tags prevent unlabelled RGB->YUV output.
-            filters.append('scale=out_color_matrix=bt709:out_range=tv')
+            filters.append(colors.encode_filter(media,options))
             video=(['-c:v','prores_ks','-profile:v','3','-pix_fmt','yuv422p10le']
                 if profile=='prores' else
                 ['-c:v','libx264','-preset','medium' if profile=='quality' else 'fast',
                  '-crf','14' if profile=='quality' else '18','-pix_fmt','yuv420p'])
             if encoder_key!='cpu':video=[*acceleration.ENCODER_ARGS[encoder_key],'-pix_fmt','yuv420p']
-            video+=['-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv']
+            video+=colors.output_tags(media,options)
+        filters.append(colors.tag_filter(media,options,rgb=profile=='lossless'))
         command=[core.ffmpeg(),'-hide_banner','-loglevel','error','-nostdin','-y',
             '-f','rawvideo','-pixel_format',pixel,'-video_size',f'{ow}x{oh}',
             '-framerate',info.fps_text,'-i','pipe:0',
@@ -232,7 +234,7 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
         if hasattr(analysis,'stats'):analysis.stats['export_decoder']=decode_label
         decoder=subprocess.Popen([core.ffmpeg(),'-hide_banner','-loglevel','error','-nostdin',
             *decode_args,'-i',info.path,'-map','0:v:0','-an','-sn','-dn','-vf',
-            f'fps={info.fps_text},trim=start_frame={options.start_frame}:end_frame={end},setpts=PTS-STARTPTS,scale={w}:{h},setsar=1',
+            f'fps={info.fps_text},trim=start_frame={options.start_frame}:end_frame={end},setpts=PTS-STARTPTS,scale={w}:{h},setsar=1,'+colors.decode_filter(media,options),
             '-fps_mode','passthrough','-pix_fmt',pixel,'-f','rawvideo','pipe:1'],stdout=subprocess.PIPE,stderr=dec_errors,creationflags=core.HIDDEN)
         nbytes=w*h*3*dtype.itemsize
         for index in range(options.start_frame,end):
@@ -262,8 +264,10 @@ def export(analysis,destination,settings,options,manual=None,cancel=None,progres
         if abs(actual-duration)>max(.15,2/rate):
             raise RuntimeError(f'音视频时长校验失败：预计 {duration:.3f}s，实际 {actual:.3f}s。')
         result=core.probe(str(temp))
-        if abs(result.fps-rate)>.05 or (result.width,result.height)!=(ow+ow%2,oh+oh%2):
+        expected_size=(ow,oh) if profile=='lossless' else (ow+ow%2,oh+oh%2)
+        if abs(result.fps-rate)>.05 or (result.width,result.height)!=expected_size:
             raise RuntimeError('成片分辨率或帧率校验失败，未保存输出。')
+        colors.verify_tags(temp,media,options,rgb=profile=='lossless')
         if analysis.fingerprint!=core.fingerprint(source) or dest.exists():
             raise RuntimeError('源视频或目标位置发生变化，已停止保存。')
         temp.rename(dest)

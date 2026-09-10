@@ -156,7 +156,7 @@ class Decoder:
         self.close()
 
 
-def read_frame(info, index, size=None):
+def read_frame(info, index, size=None, color_filter=None):
     w, h = size or fit_size(info.width,info.height,1100)
     # Seek on the normalized timeline: keep the fps filter before frame selection.
     # Accurate input seeking avoids decoding an entire long interview per click.
@@ -164,7 +164,7 @@ def read_frame(info, index, size=None):
         ffmpeg(), '-hide_banner', '-loglevel', 'error', '-nostdin',
         '-ss', f'{max(0,index)/info.fps:.9f}', '-i', info.path,
         '-map', '0:v:0', '-frames:v', '1', '-an', '-sn',
-        '-vf', f'scale={w}:{h},setsar=1', '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'],
+        '-vf', f'scale={w}:{h},setsar=1'+(','+color_filter if color_filter else ''), '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=HIDDEN)
     if result.returncode or len(result.stdout) != w*h*3:
         raise RuntimeError('无法预览这个位置的视频画面。')

@@ -6,3 +6,4 @@ imageio-ffmpeg==0.6.0
 pyinstaller==6.22.2
 PySide6==6.11.2
 onnxruntime-directml==1.24.4; platform_system == "Windows"
+av==18.1.0

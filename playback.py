@@ -6,6 +6,7 @@ import numpy as np
 from PySide6.QtCore import QObject,Signal,Qt
 from PySide6.QtGui import QImage
 import core,exporter
+import color_management as colors
 
 
 class Events(QObject):
@@ -35,7 +36,10 @@ class LatestRenderer:
                 if self.stopped:return
                 task=self.pending;self.pending=None
             try:
-                epoch,index,source,info,analysis,settings,options,manual,compare,limit=task
+                epoch,index,source,info,analysis,settings,options,manual,compare,limit,media=task
+                managed=not compare and (options.input_color!='auto' or options.input_range!='auto' or options.output_color!='preserve')
+                if managed:
+                    source=core.read_frame(info,index,core.fit_size(info.width,info.height,limit),colors.decode_filter(media,options))
                 if source is None:rgb=core.read_frame(info,index,core.fit_size(info.width,info.height,limit))
                 elif isinstance(source,np.ndarray):rgb=source
                 else:
@@ -48,6 +52,8 @@ class LatestRenderer:
                 known=analysis is not None and index<len(analysis.faces)
                 faces=analysis.faces[index] if known else []
                 if compare:output=exporter.rotate(rgb,options.rotation)
+                elif options.profile=='native' and exporter.native_export.supported(media['pixel_format']):
+                    output=exporter.native_export.preview(info,index,faces,settings,manual,options.auto_mask and known,limit)
                 else:
                     if not known:options.auto_mask=False
                     output=exporter.mask_render(rgb,faces,settings,manual,index,options)
