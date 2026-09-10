@@ -21,9 +21,25 @@ def supported(fmt):
     return bool(re.fullmatch(r'(?:yuv(?:420|422|444)p(?:(?:9|10|12|14|16)le)?|gbrp(?:9|10|12|14|16)le)', fmt))
 
 
-def validate(info, options, media):
+def validate_source(media):
     if not supported(media.get('pixel_format', '')):
         raise ValueError('源像素无损支持平面 YUV（8～16 位）和 GBR（9～16 位）。此格式请选 RGB 无损编码。')
+    if media.get('rotation') or media.get('sar', '1') not in ('1', '1/1') or media.get('interlaced'):
+        raise ValueError('源像素无损暂支持逐行、方形像素且无旋转标记的素材；此素材不会被自动变换。')
+    if media.get('alpha') or media.get('hdr') or media.get('wide_gamut'):
+        raise ValueError('源像素无损目前支持无透明通道的 SDR 素材。')
+
+
+def compatible(media):
+    try:
+        validate_source(media)
+    except ValueError:
+        return False
+    return True
+
+
+def validate(info, options, media):
+    validate_source(media)
     if options.resolution or options.fps or options.rotation:
         raise ValueError('源像素无损要求保持原尺寸、原帧率、原方向；需要变换时请选择 RGB 无损编码或普通导出。')
     if options.start_frame or options.end_frame not in (-1, info.frames):
@@ -32,8 +48,6 @@ def validate(info, options, media):
         raise ValueError('源像素无损请保留原音轨或移除音轨；调整音量请用其他导出方式。')
     if options.input_color != 'auto' or options.input_range != 'auto' or options.output_color != 'preserve':
         raise ValueError('源像素无损保留原始色彩标记，请把输入设为自动、输出设为保留源色彩。')
-    if media.get('rotation') or media.get('sar', '1') not in ('1', '1/1') or media.get('interlaced'):
-        raise ValueError('源像素无损暂支持逐行、方形像素且无旋转标记的素材；此素材不会被自动变换。')
 
 
 def mask_for(width, height, faces, settings, manual, index, auto_mask):
@@ -83,6 +97,11 @@ def edit_plane(values, mask, settings, black):
 
 
 def render(frame, mask, settings):
+    if not np.any(mask):
+        return frame
+    # Decoded H.264/HEVC frames can share buffers with reference pictures.
+    # Detach BEFORE obtaining planes; copying a NumPy array alone is not enough.
+    frame.make_writable()
     bits = max(c.bits for c in frame.format.components)
     for i, plane in enumerate(frame.planes):
         padded, values = plane_array(plane, bits)
@@ -102,21 +121,88 @@ def digest_frame(frame, digest):
         digest.update(values.tobytes())
 
 
+def copy_frame(frame):
+    """Keep the cached original untouched when preview settings change."""
+    result = av.VideoFrame(frame.width, frame.height, frame.format.name)
+    bits = max(c.bits for c in frame.format.components)
+    for source, target in zip(frame.planes, result.planes):
+        padded, values = plane_array(target, bits)
+        padded[:] = 0
+        values[:] = plane_array(source, bits)[1]
+    for key in ('color_primaries', 'color_trc', 'colorspace', 'color_range'):
+        setattr(result, key, getattr(frame, key))
+    result.pts, result.time_base = frame.pts, frame.time_base
+    return result
+
+
+class PreviewReader:
+    """One decoder and one unmodified frame, owned only by the preview worker."""
+    def __init__(self, info):
+        self.info = info
+        self.container = av.open(info.path)
+        self.stream = self.container.streams.video[0]
+        self.frames = None
+        self.frame = None
+        self.index = None
+
+    def close(self):
+        self.frames = self.frame = None
+        self.container.close()
+
+    def read(self, index, cancel=None):
+        core.check_cancel(cancel)
+        if self.index == index:
+            return self.frame
+        rate = Fraction(self.info.fps_text)
+        target = Fraction(index, 1) / rate
+        offset = (self.stream.start_time or 0) * self.stream.time_base
+        threshold = target - Fraction(1, 2) / rate
+        # Nearby forward requests reuse the decoder; large/backward jumps seek.
+        if self.index is None or not 0 < index-self.index <= 2*self.info.fps:
+            self.container.seek(int((target+offset)/self.stream.time_base), stream=self.stream, backward=True)
+            self.frames = iter(self.container.decode(self.stream))
+            self.frame = None
+        while True:
+            core.check_cancel(cancel)
+            frame = self.frame
+            if frame is not None and frame.pts is not None and frame.pts*frame.time_base-offset >= threshold:
+                if not supported(frame.format.name) or frame.rotation or frame.interlaced_frame:
+                    raise ValueError('此帧不支持原生预览，请切换 RGB 无损编码。')
+                self.index = index
+                return frame
+            self.frame = next(self.frames, None)
+            if self.frame is None:
+                self.index = None
+                raise ValueError('无法读取此位置的原生画面。')
+
+    def preview(self, index, faces, settings, manual, auto_mask, limit, cancel=None):
+        frame = self.read(index, cancel)
+        mask = mask_for(frame.width, frame.height, faces, settings, manual, index, auto_mask)
+        # Render at source precision/size, then resize only the displayed RGB.
+        output = render(copy_frame(frame), mask, settings) if np.any(mask) else frame
+        rgb = output.to_ndarray(format='rgb24')
+        size = core.fit_size(frame.width, frame.height, limit)
+        return cv2.resize(rgb, size, interpolation=cv2.INTER_AREA) if size != (frame.width, frame.height) else rgb
+
+
 def preview(info, index, faces, settings, manual, auto_mask, limit):
-    with av.open(info.path) as inp:
-        stream = inp.streams.video[0]
-        target = Fraction(index,1) / Fraction(info.fps_text)
-        offset = (stream.start_time or 0) * stream.time_base
-        inp.seek(int((target+offset)/stream.time_base), stream=stream, backward=True)
-        for frame in inp.decode(stream):
-            if frame.pts is not None and frame.pts*frame.time_base-offset >= target-Fraction(1,2)/Fraction(info.fps_text):
-                if not supported(frame.format.name): raise ValueError('此帧格式不支持原生预览。')
-                mask = mask_for(frame.width,frame.height,faces,settings,manual,index,auto_mask)
-                render(frame,mask,settings)
-                rgb = frame.to_ndarray(format='rgb24')
-                size = core.fit_size(frame.width,frame.height,limit)
-                return cv2.resize(rgb,size,interpolation=cv2.INTER_AREA) if size!=(frame.width,frame.height) else rgb
-    raise ValueError('无法读取此位置的原生画面。')
+    validate_source(colors.probe(info.path))
+    reader = PreviewReader(info)
+    try:
+        return reader.preview(index, faces, settings, manual, auto_mask, limit)
+    finally:
+        reader.close()
+
+
+def verify_outside_mask(original, output, mask):
+    if (original.width, original.height, original.format.name) != (output.width, output.height, output.format.name):
+        raise RuntimeError('原片与成片像素格式或尺寸不一致，未保存输出。')
+    bits = max(c.bits for c in original.format.components)
+    for source, target in zip(original.planes, output.planes):
+        before, after = plane_array(source, bits)[1], plane_array(target, bits)[1]
+        outside = plane_mask(mask, source.width, source.height) == 0
+        if not np.array_equal(before[outside], after[outside]):
+            raise RuntimeError('未遮挡区域与独立解码的原片像素不一致，未保存输出。')
 
 
 def export(analysis, destination, settings, options, manual=None, cancel=None, progress=None, media=None):
@@ -192,7 +278,8 @@ def export(analysis, destination, settings, options, manual=None, cancel=None, p
                 for encoded in dst.encode(): out.mux(encoded)
         if not frame_count: raise ValueError('未读到视频帧。')
         actual = hashlib.sha256()
-        with av.open(str(temp)) as check, times_path.open(encoding='ascii') as times:
+        with av.open(str(temp)) as check, av.open(str(source)) as reference, times_path.open(encoding='ascii') as times:
+            originals = iter(reference.decode(video=0))
             actual_count = 0
             for frame in check.decode(video=0):
                 core.check_cancel(cancel)
@@ -200,10 +287,16 @@ def export(analysis, destination, settings, options, manual=None, cancel=None, p
                 expected_time = times.readline()
                 if not expected_time or abs(float(frame.pts*frame.time_base)-float(expected_time)) > .0011:
                     raise RuntimeError('无损导出时间戳校验失败。')
+                original = next(originals, None)
+                if original is None or original.pts is None or abs(float(original.pts*original.time_base)-float(expected_time)) > .0011:
+                    raise RuntimeError('原片独立解码时间线校验失败。')
+                faces = analysis.faces[actual_count] if options.auto_mask else []
+                mask = mask_for(original.width, original.height, faces, settings, manual, actual_count, options.auto_mask)
+                verify_outside_mask(original, frame, mask)
                 digest_frame(frame, actual)
                 actual_count += 1
                 if progress and actual_count % 5 == 0: progress(.8+.2*actual_count/frame_count,actual_count,0)
-            if times.readline() or actual_count != frame_count or actual.digest() != expected.digest():
+            if next(originals, None) is not None or times.readline() or actual_count != frame_count or actual.digest() != expected.digest():
                 raise RuntimeError('无损导出逐帧像素校验失败，成片未保存。')
             if len(check.streams.audio) != len(audio): raise RuntimeError('音轨数量校验失败。')
         with av.open(str(temp)) as check:
@@ -230,7 +323,8 @@ def export(analysis, destination, settings, options, manual=None, cancel=None, p
         if core.fingerprint(source) != analysis.fingerprint or dest.exists(): raise RuntimeError('源视频或目标位置发生变化。')
         temp.rename(dest)
         complete = True
-        analysis.stats.update(export_encoder='源像素无损 · FFV1 · 逐帧校验通过', native_verified_frames=frame_count)
+        analysis.stats.update(export_encoder='源像素无损 · FFV1 · 逐帧校验通过', native_verified_frames=frame_count,
+                              native_source_verified_frames=frame_count)
         return str(dest)
     finally:
         temp.with_suffix('.times.tmp').unlink(missing_ok=True)

@@ -50,6 +50,16 @@ def details(path):
     return colors.probe(path)
 
 
+def default_profile(media):
+    return 'native' if native_export.compatible(media) else 'lossless'
+
+
+def native_preview_compatible(media, options):
+    return (options.profile == 'native' and native_export.compatible(media)
+            and not options.rotation and options.input_color == 'auto'
+            and options.input_range == 'auto' and options.output_color == 'preserve')
+
+
 def suffix_for(options,media):
     if options.profile not in PROFILES:
         raise ValueError('未知的导出预设。')

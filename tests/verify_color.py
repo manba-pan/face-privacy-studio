@@ -4,6 +4,7 @@ import sys, subprocess, tempfile, unittest, os, threading, copy
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import av
 import numpy as np
+from unittest.mock import patch
 import core, exporter, native_export, color_management as colors
 
 
@@ -158,6 +159,61 @@ class ColorChecks(unittest.TestCase):
         cancel=threading.Event();dest=self.root/'cancel-mid.mkv'
         with self.assertRaises(core.Cancelled):
             exporter.export(a,dest,core.Settings(),exporter.ExportOptions(profile='native',auto_mask=False),cancel=cancel,progress=lambda *_:cancel.set())
+        self.assertFalse(dest.exists());self.assertFalse(list(self.root.glob('.native-*')))
+
+    def interframe_fixture(self, codec='libx264', fmt='yuv420p'):
+        src=self.root/f'interframe-{codec}.mp4'
+        args=['-f','lavfi','-i','testsrc2=size=320x240:rate=30:duration=2',
+              '-c:v',codec,'-pix_fmt',fmt,'-g','120','-bf','3']
+        if codec=='libx265':args+=['-x265-params','log-level=error:pools=2:frame-threads=1:scenecut=0']
+        else:args+=['-sc_threshold','0']
+        ff([*args,src])
+        return src
+
+    def test_11_interframe_masks_preserve_other_frames_and_outside_pixels(self):
+        for codec,fmt in [('libx264','yuv420p'),('libx265','yuv420p10le')]:
+            with self.subTest(codec=codec):
+                src=self.interframe_fixture(codec,fmt);a=analysis(src)
+                settings=core.Settings(style='solid')
+                manual=[{'start':0,'end':0,'rect':[.2,.2,.6,.6]},
+                        {'start':25,'end':30,'rect':[.65,.1,.9,.4]}]
+                dest=self.root/f'interframe-{codec}-out.mkv'
+                exporter.export(a,dest,settings,exporter.ExportOptions(profile='native',auto_mask=False,audio='mute'),manual)
+                # Independently decode the original, not the frames the exporter
+                # modified. Both codecs use references across masked frames.
+                before,after=planes(src),planes(dest)
+                self.assertEqual(len(before),len(after))
+                changed=False
+                for index,(b,f) in enumerate(zip(before,after)):
+                    mask=native_export.mask_for(a.info.width,a.info.height,[],settings,manual,index,False)
+                    for x,y in zip(b,f):
+                        outside=native_export.plane_mask(mask,x.shape[1],x.shape[0])==0
+                        np.testing.assert_array_equal(x[outside],y[outside],err_msg=f'{codec} frame {index}')
+                        changed|=bool(np.any(x!=y))
+                self.assertTrue(changed)
+                self.assertEqual(a.stats['native_source_verified_frames'],len(before))
+
+    def test_12_independent_verification_rejects_unmasked_corruption(self):
+        src=self.interframe_fixture();a=analysis(src);dest=self.root/'corrupted.mkv'
+        render=native_export.render
+        def corrupt(frame,mask,settings):
+            frame=render(frame,mask,settings);frame.make_writable()
+            # Simulate an accidental write outside any requested effect. The
+            # export's expected hash includes this write and cannot catch it.
+            values=native_export.plane_array(frame.planes[0],8)[1]
+            values[0,0]^=1
+            return frame
+        with patch.object(native_export,'render',corrupt):
+            with self.assertRaisesRegex(RuntimeError,'未遮挡区域'):
+                exporter.export(a,dest,core.Settings(),exporter.ExportOptions(profile='native',auto_mask=False,audio='mute'))
+        self.assertFalse(dest.exists());self.assertFalse(list(self.root.glob('.native-*')))
+
+    def test_13_cancel_during_independent_source_verification(self):
+        src=self.fixture();a=analysis(src);dest=self.root/'cancel-verify.mkv';cancel=threading.Event()
+        def progress(value,*_):
+            if value>.8:cancel.set()
+        with self.assertRaises(core.Cancelled):
+            exporter.export(a,dest,core.Settings(),exporter.ExportOptions(profile='native',auto_mask=False,audio='mute'),cancel=cancel,progress=progress)
         self.assertFalse(dest.exists());self.assertFalse(list(self.root.glob('.native-*')))
 
 

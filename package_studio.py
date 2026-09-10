@@ -9,7 +9,7 @@ SOURCE_FILES=['studio.py','core.py','exporter.py','project_info.py','acceptance.
     'acceleration.py','analysis_engine.py','analysis_cache.py','playback.py','vision_runtime.py','color_management.py','native_export.py','color_acceptance.py',
     'requirements.txt','collect_notices.py','package_studio.py','build_installer.py','.gitignore','.gitattributes',*DOCS,
     'release_tools/InstallRuntime.ps1','release_tools/runtime-manifest.json','release_tools/Qt-Python-wrapper-sources.zip',
-    'tests/verify.py','tests/verify_studio_export.py','tests/studio_ui_smoke.py','tests/verify_analysis.py','tests/verify_color.py']
+    'tests/verify.py','tests/verify_studio_export.py','tests/studio_ui_smoke.py','tests/verify_analysis.py','tests/verify_color.py','tests/verify_preview.py']
 
 def zip_and_check(target,files):
     with zipfile.ZipFile(target,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as archive:

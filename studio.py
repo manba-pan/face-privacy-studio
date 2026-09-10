@@ -565,7 +565,7 @@ class Studio(QMainWindow):
                 if path in existing:continue
                 try:
                     clip=Clip(core.probe(path),exporter.details(path))
-                    clip.options.profile='native' if exporter.native_export.supported(clip.media['pixel_format']) else 'lossless'
+                    clip.options.profile=exporter.default_profile(clip.media)
                     added.append(clip)
                 except Exception as error:errors.append(f'{Path(path).name}: {error}')
             return added,errors
@@ -584,7 +584,7 @@ class Studio(QMainWindow):
         if c.analysis:status='识别完成' if c.analysis.completed else f'已分析 {len(c.analysis.faces)}/{c.info.frames} 帧'
         return f'{Path(c.info.path).name}\n{c.info.width} × {c.info.height} · {c.info.fps:g} fps\n{timecode(c.info.duration)}  ·  {status}'
     def select_clip(self,index):
-        self.epoch+=1;self.renderer.discard();self.seek_timer.stop();self.exact_pending=False
+        self.epoch+=1;self.renderer.discard(close_source=True);self.seek_timer.stop();self.exact_pending=False
         self.pending_seek=None;self.pending_play=False
         self.player.stop();self.player.setSource(QUrl());self.current=index;self.index=0;self.raw=None;self.raw_index=-1;self.stop_drawing()
         c=self.clip
@@ -850,7 +850,7 @@ class Studio(QMainWindow):
             options=copy.deepcopy(c.options);known=c.analysis is not None and self.index<len(c.analysis.faces)
             if not known:options.auto_mask=False
             faces=c.analysis.faces[self.index] if known else []
-            if options.profile=='native':
+            if exporter.native_preview_compatible(c.media,options):
                 rgb=exporter.native_export.preview(c.info,self.index,faces,c.settings,c.manual,options.auto_mask,max(c.info.width,c.info.height))
             else:
                 raw=core.read_frame(c.info,self.index,(c.info.width,c.info.height),colors.decode_filter(c.media,options))

@@ -21,6 +21,11 @@ def verification_loop(app, window, output):
         '-vf','setparams=color_primaries=smpte170m:color_trc=smpte170m:colorspace=smpte170m:range=tv',
         '-c:v','ffv1','-pix_fmt','yuv420p10le','-c:a','pcm_s16le',str(source)]
     subprocess.run(command,check=True,creationflags=core.HIDDEN)
+    interframe=output/'generated-interframe.mp4';rotated=output/'generated-rotated.mp4'
+    subprocess.run([core.ffmpeg(),'-v','error','-nostdin','-f','lavfi','-i','testsrc2=size=320x240:rate=30:duration=2',
+        '-c:v','libx264','-g','120','-sc_threshold','0','-bf','3',str(interframe)],check=True,creationflags=core.HIDDEN)
+    subprocess.run([core.ffmpeg(),'-v','error','-nostdin','-display_rotation:v:0','90','-i',str(interframe),
+        '-c','copy',str(rotated)],check=True,creationflags=core.HIDDEN)
     source_hash=hashlib.sha256(source.read_bytes()).hexdigest()
     state={'step':0,'started':time.monotonic()};errors=[]
     report={'passed':False,'checks':[]}
@@ -91,6 +96,38 @@ def verification_loop(app, window, output):
                 assert tags['bit_depth']==16
                 assert hashlib.sha256(source.read_bytes()).hexdigest()==source_hash
                 report['checks'].append('Frozen Rec.601 to Rec.709 export: tagged 16-bit RGB FFV1, source SHA-256 unchanged')
+                state['step']=4;window.import_paths([str(interframe)])
+            elif step==4:
+                window.bin.setCurrentRow(len(window.clips)-1)
+                assert window.clip.options.profile=='native'
+                window.auto.setChecked(False)
+                window.clip.manual=[{'start':0,'end':0,'rect':[.2,.2,.6,.6]}]
+                state['step']=5;start_export('interframe-native.mkv')
+            elif step==5:
+                count=0
+                with av.open(str(interframe)) as src,av.open(str(output/'interframe-native.mkv')) as dst:
+                    originals=iter(src.decode(video=0))
+                    for index,b in enumerate(dst.decode(video=0)):
+                        a=next(originals,None);assert a is not None
+                        for x,y in zip(a.planes,b.planes):
+                            p=native_export.plane_array(x,8)[1];q=native_export.plane_array(y,8)[1]
+                            if index>0:assert np.array_equal(p,q),'Unexpected pixels after the one-frame mask'
+                        count+=1
+                    assert count==60 and next(originals,None) is None
+                report['checks'].append('H.264 P/B frames: one-frame mask leaves all 59 later frames unchanged')
+                state['step']=6;window.import_paths([str(rotated)])
+            elif step==6:
+                window.bin.setCurrentRow(len(window.clips)-1)
+                assert window.clip.options.profile=='lossless'
+                assert (window.clip.info.width,window.clip.info.height)==(240,320)
+                window.auto.setChecked(False)
+                window.clip.manual=[{'start':0,'end':59,'rect':[.1,.1,.4,.4]}]
+                window.viewer.image=None;window.refresh_frame();window.request_still();state['step']=7
+            elif step==7:
+                if window.viewer.image is None:return
+                assert (window.viewer.image.width(),window.viewer.image.height())==(240,320)
+                window.grab().save(str(output/'rotated-preview.png'))
+                report['checks'].append('Rotated source defaults to RGB lossless and keeps portrait mask preview')
                 finish()
         except Exception as error:finish(error)
     timer.timeout.connect(tick);timer.start()
