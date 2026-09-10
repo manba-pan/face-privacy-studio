@@ -24,6 +24,7 @@ import exporter
 import analysis_engine
 import analysis_cache
 import acceleration
+import color_management as colors
 from playback import LatestRenderer
 from project_info import VERSION, AUTHOR, ProjectDialog
 
@@ -314,14 +315,14 @@ class Studio(QMainWindow):
         self.status.setText('当前方案的识别缓存已清除。原视频与手动画框仍保留；点击“开始打码”可重新识别。')
     def wants_native(self):
         c=self.clip
-        return bool(c and not self.viewer.drawing and not c.options.rotation and
+        return bool(c and c.options.input_color=='auto' and c.options.input_range=='auto' and c.options.output_color=='preserve' and not self.viewer.drawing and not c.options.rotation and
                     (self.compare.isChecked() or (not c.manual and (not c.analysis or self.index>=len(c.analysis.faces) or not c.options.auto_mask))))
     def render_task(self,source,index):
         c=self.clip
         if not c:return
         settings,options,manual=copy.deepcopy((c.settings,c.options,c.manual))
         limit=self.preview_quality.currentData() or max(c.info.width,c.info.height)
-        self.renderer.submit((self.epoch,index,source,c.info,c.analysis,settings,options,manual,self.compare.isChecked(),limit))
+        self.renderer.submit((self.epoch,index,source,c.info,c.analysis,settings,options,manual,self.compare.isChecked(),limit,c.media))
     def request_still(self):
         if not self.clip or self.player.playbackState()==QMediaPlayer.PlaybackState.PlayingState:return
         self.exact_pending=True;self.render_task(None,self.index)
@@ -382,7 +383,7 @@ class Studio(QMainWindow):
         self.viewer=Viewer();self.viewer.rectangle.connect(self.draw_rectangle)
         self.monitor=QStackedWidget();self.monitor.addWidget(self.viewer);self.monitor.addWidget(self.native_video);cl.addWidget(self.monitor,1)
         row=QHBoxLayout();self.detection=label('等待导入视频','muted');row.addWidget(self.detection);row.addStretch()
-        self.snapshot_button=button('保存此帧',self.snapshot);row.addWidget(self.snapshot_button);cl.addLayout(row)
+        self.snapshot_button=button('保存此帧',self.snapshot);self.snapshot_button.setToolTip('保存原尺寸 8 位 PNG 预览帧；高位深无损请导出视频。');row.addWidget(self.snapshot_button);cl.addLayout(row)
         row=QHBoxLayout();row.addStretch();row.addWidget(button('❮',lambda:self.seek(self.index-1)))
         self.play_button=button('播放',self.toggle_play);row.addWidget(self.play_button)
         row.addWidget(button('❯',lambda:self.seek(self.index+1)));row.addStretch();cl.addLayout(row)
@@ -469,7 +470,17 @@ class Studio(QMainWindow):
     def build_export_tab(self):
         box=self.page('导出');box.addWidget(label('画质优先','heading'))
         self.profile=combo([(v[0],k) for k,v in exporter.PROFILES.items()]);box.addWidget(self.profile)
-        self.profile_hint=self.hint(box,exporter.PROFILES['quality'][2])
+        self.profile_hint=self.hint(box,exporter.PROFILES['native'][2])
+        box.addWidget(label('色彩','heading'))
+        self.source_color_info=self.hint(box,'导入后显示原片色彩信息。')
+        form=QFormLayout()
+        self.input_color=combo([('自动 · 读取原片标记','auto')]+[(v[0],k) for k,v in colors.SPACES.items()])
+        self.input_range=combo([('自动 · 读取原片标记','auto'),('有限范围 · 视频电平','tv'),('全范围 · 数据电平','pc')])
+        self.output_color=combo([('保留源色彩','preserve')]+[(v[0],k) for k,v in colors.SPACES.items()])
+        form.addRow('输入色彩',self.input_color);form.addRow('输入范围',self.input_range);form.addRow('输出色彩',self.output_color);box.addLayout(form)
+        self.color_note=self.hint(box,'一般保持自动即可。HDR / Log 的完整色彩管理暂未提供。')
+        self.hint(box,'预览用于检查遮挡，不作为校准色彩监看。转换后的成片按输出色彩标记播放。')
+        for widget in (self.input_color,self.input_range,self.output_color):widget.currentIndexChanged.connect(self.controls_changed)
         self.encoder=combo([('CPU · 画质优先','cpu'),('自动选择可用硬件编码','auto'),('AMD AMF','amf'),('NVIDIA NVENC','nvenc'),('Intel Quick Sync','qsv')])
         self.export_decode=combo([('CPU · 保守解码','cpu'),('自动硬件解码 · 可回退','auto')])
         hwform=QFormLayout();hwform.addRow('编码设备',self.encoder);hwform.addRow('导出解码',self.export_decode);box.addLayout(hwform)
@@ -480,12 +491,23 @@ class Studio(QMainWindow):
         self.hint(box,'不会放大低分辨率素材，也不会用重复帧伪造高帧率。4K / 高帧率逐帧处理，速度取决于电脑与遮挡设置。')
         self.export_summary=label('导入素材后显示输出信息');self.export_summary.setWordWrap(True);box.addWidget(self.export_summary)
         box.addWidget(button('导出当前素材',self.export_current,True))
-        self.hint(box,'FFV1 无损保存处理后的 RGB 画面，并不等于源文件逐字节无损。ProRes 适合后续剪辑。当前支持 SDR，HDR 素材需先受控转换。')
+        self.hint(box,'源像素无损：完整原片，未遮挡样本保持不变；色度边界包含共用样本。RGB 无损：允许处理，编码不再丢失画面。两者文件都较大；字幕、附件及全部相机元数据不作保留承诺。')
         box.addWidget(label('项目与批量','heading'))
         box.addWidget(button('将当前参数应用到全部素材',self.apply_all))
         self.hint(box,'复制遮挡、画质、旋转和音频设置。各素材的截取区间、手动框分别保留。项目文件只记录引用路径与操作参数，不包含视频。')
         box.addStretch()
-        for widget in (self.profile,self.resolution,self.framerate):widget.currentIndexChanged.connect(self.controls_changed)
+        self.profile.currentIndexChanged.connect(self.export_profile_changed)
+        for widget in (self.resolution,self.framerate):widget.currentIndexChanged.connect(self.controls_changed)
+    def export_profile_changed(self,*_):
+        if self.loading:return
+        if self.profile.currentData()=='native':
+            for widget,value in ((self.input_color,'auto'),(self.input_range,'auto'),(self.output_color,'preserve'),(self.resolution,0),(self.framerate,0),(self.rotation,0),(self.export_decode,'cpu')):
+                widget.blockSignals(True);widget.setCurrentIndex(widget.findData(value));widget.blockSignals(False)
+            if self.audio_mode.currentData()=='aac':
+                self.audio_mode.blockSignals(True);self.audio_mode.setCurrentIndex(self.audio_mode.findData('copy'));self.audio_mode.blockSignals(False)
+            if self.clip:self.clip.options.start_frame=0;self.clip.options.end_frame=-1
+            self.status.setText('源像素无损：已恢复完整原片、原尺寸和自动色彩；需要截取或转换时可切换 RGB 无损。')
+        self.controls_changed()
     def bind_shortcuts(self):
         self.shortcuts=[]
         for key,slot in [('Space',self.toggle_play),('Left',lambda:self.seek(self.index-1)),('Right',lambda:self.seek(self.index+1)),('I',self.mark_in),('O',self.mark_out),('Ctrl+S',self.save_project),('Ctrl+O',self.import_dialog),('Escape',self.stop_drawing)]:
@@ -541,7 +563,10 @@ class Studio(QMainWindow):
             for path in paths:
                 core.check_cancel(self.cancel)
                 if path in existing:continue
-                try:added.append(Clip(core.probe(path),exporter.details(path)))
+                try:
+                    clip=Clip(core.probe(path),exporter.details(path))
+                    clip.options.profile=exporter.default_profile(clip.media)
+                    added.append(clip)
                 except Exception as error:errors.append(f'{Path(path).name}: {error}')
             return added,errors
         def done(result):
@@ -559,7 +584,7 @@ class Studio(QMainWindow):
         if c.analysis:status='识别完成' if c.analysis.completed else f'已分析 {len(c.analysis.faces)}/{c.info.frames} 帧'
         return f'{Path(c.info.path).name}\n{c.info.width} × {c.info.height} · {c.info.fps:g} fps\n{timecode(c.info.duration)}  ·  {status}'
     def select_clip(self,index):
-        self.epoch+=1;self.renderer.discard();self.seek_timer.stop();self.exact_pending=False
+        self.epoch+=1;self.renderer.discard(close_source=True);self.seek_timer.stop();self.exact_pending=False
         self.pending_seek=None;self.pending_play=False
         self.player.stop();self.player.setSource(QUrl());self.current=index;self.index=0;self.raw=None;self.raw_index=-1;self.stop_drawing()
         c=self.clip
@@ -569,7 +594,8 @@ class Studio(QMainWindow):
             for widget,value in [(self.region,c.settings.region),(self.effect,c.settings.style),(self.missing,c.settings.missing),
                     (self.rotation,c.options.rotation),(self.audio_mode,c.options.audio),(self.profile,c.options.profile),(self.resolution,c.options.resolution),(self.framerate,c.options.fps),
                     (self.analysis_profile,c.analysis_options.profile),(self.analysis_device,c.analysis_options.device),(self.analysis_decode,c.analysis_options.decode),
-                    (self.encoder,c.options.encoder),(self.export_decode,c.options.decode)]:
+                    (self.encoder,c.options.encoder),(self.export_decode,c.options.decode),
+                    (self.input_color,c.options.input_color),(self.input_range,c.options.input_range),(self.output_color,c.options.output_color)]:
                 widget.setCurrentIndex(max(0,widget.findData(value)))
             self.auto.setChecked(c.options.auto_mask);self.strength.setValue(c.settings.strength);self.coverage.setValue(c.settings.coverage);self.eye_height.setValue(c.settings.eye_height);self.volume.setValue(round(c.options.volume*100))
             self.video_title.setText(Path(c.info.path).name)
@@ -604,12 +630,21 @@ class Studio(QMainWindow):
             c.settings=core.Settings(self.region.currentData(),self.effect.currentData(),self.strength.value(),self.coverage.value(),self.eye_height.value(),self.missing.currentData())
             c.options.profile=self.profile.currentData();c.options.audio=self.audio_mode.currentData();c.options.rotation=self.rotation.currentData();c.options.auto_mask=self.auto.isChecked()
             c.options.resolution=self.resolution.currentData();c.options.fps=self.framerate.currentData();c.options.volume=self.volume.value()/100 if c.options.audio=='aac' else 1
+            c.options.input_color=self.input_color.currentData();c.options.input_range=self.input_range.currentData();c.options.output_color=self.output_color.currentData()
         self.strength_label.setText(f'强度 {self.strength.value()} / 5');self.strength.setEnabled(self.effect.currentData()!='solid')
         self.eye_height.setEnabled(self.region.currentData()=='eyes');self.volume.setEnabled(self.audio_mode.currentData()=='aac');self.volume_label.setText(f'{self.volume.value()}%')
         self.profile_hint.setText(exporter.PROFILES[self.profile.currentData()][2])
         if c:
             c.options.encoder=self.encoder.currentData();c.options.decode=self.export_decode.currentData()
         self.encoder.setEnabled(self.profile.currentData() in ('quality','compact'))
+        native=self.profile.currentData()=='native'
+        for widget in (self.input_color,self.input_range,self.output_color,self.resolution,self.framerate,self.rotation,self.export_decode):widget.setEnabled(not native)
+        if c:
+            self.source_color_info.setText(colors.description(c.media))
+            self.color_note.setText(colors.policy_note(c.media,c.options))
+            if native:
+                try:exporter.validate(c.info,c.options,c.media)
+                except ValueError as error:self.color_note.setText(str(error)+'\n切换 RGB 无损可继续调整。')
         self.audio.setMuted(self.audio_mode.currentData()=='mute');self.audio.setVolume(min(1,c.options.volume) if c else 1)
         self.update_range();self.refresh_frame()
     def update_range(self):
@@ -812,12 +847,16 @@ class Studio(QMainWindow):
         if not Path(path).suffix:path+='.png'
         if Path(path).exists():self.message('请换一个新文件名，已有文件不会被覆盖。');return
         try:
-            raw=core.read_frame(c.info,self.index,(c.info.width,c.info.height))
             options=copy.deepcopy(c.options);known=c.analysis is not None and self.index<len(c.analysis.faces)
             if not known:options.auto_mask=False
-            rgb=exporter.mask_render(raw,c.analysis.faces[self.index] if known else [],c.settings,c.manual,self.index,options)
+            faces=c.analysis.faces[self.index] if known else []
+            if exporter.native_preview_compatible(c.media,options):
+                rgb=exporter.native_export.preview(c.info,self.index,faces,c.settings,c.manual,options.auto_mask,max(c.info.width,c.info.height))
+            else:
+                raw=core.read_frame(c.info,self.index,(c.info.width,c.info.height),colors.decode_filter(c.media,options))
+                rgb=exporter.mask_render(raw,faces,c.settings,c.manual,self.index,options)
             if not qimage(rgb).save(path):raise ValueError('PNG 保存失败。')
-            self.status.setText(f'已保存原尺寸处理帧 · {path}')
+            self.status.setText(f'已保存原尺寸 8 位 PNG 预览帧 · {path}')
         except Exception as error:self.message(error)
     def extract_audio(self):
         c=self.clip
@@ -898,6 +937,9 @@ def main():
     app=QApplication(sys.argv);app.setApplicationName('视频一键打码工具');app.setStyle('Fusion');app.setStyleSheet(STYLE)
     window=Studio();screen=app.primaryScreen().availableGeometry();window.resize(min(1460,screen.width()-60),min(920,screen.height()-60));window.show()
     paths=[p for p in sys.argv[1:] if Path(p).is_file()]
+    if '--verify-color' in sys.argv:
+        from color_acceptance import verification_loop
+        i=sys.argv.index('--verify-color');return verification_loop(app,window,Path(sys.argv[i+1]))
     if '--verify' in sys.argv:
         from acceptance import verification_loop
         i=sys.argv.index('--verify');return verification_loop(app,window,Path(sys.argv[i+1]),Path(sys.argv[i+2]))

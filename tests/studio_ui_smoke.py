@@ -49,6 +49,8 @@ assert window.player.error()==QMediaPlayer.Error.NoError,window.player.errorStri
 assert window.index>frame,'Video sink did not advance preview'
 assert window.player.hasAudio(),'Audio track not loaded'
 window.player.pause()
+# Trimming and rotation require the RGB profile; native locks these controls.
+window.profile.setCurrentIndex(window.profile.findData('lossless'));events()
 start=round(window.clip.info.frames*.25);end=round(window.clip.info.frames*.75);key=round(window.clip.info.frames*.6)
 window.seek(start);window.mark_in();window.seek(end-1);window.mark_out()
 assert window.clip.options.start_frame==start and window.clip.options.end_frame==end

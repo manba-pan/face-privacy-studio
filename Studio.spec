@@ -13,10 +13,11 @@ os.environ['PATH']=os.pathsep.join([sys.base_prefix,str(Path(sys.base_prefix)/'D
 mp_data,mp_bins,mp_hidden=collect_all('mediapipe')
 ff_data,ff_bins,ff_hidden=collect_all('imageio_ffmpeg')
 ort_data,ort_bins,ort_hidden=collect_all('onnxruntime')
+av_data,av_bins,av_hidden=collect_all('av')
 a=Analysis([str(base/'studio.py')],pathex=[str(base)],
-    binaries=mp_bins+ff_bins+ort_bins,
-    datas=mp_data+ff_data+ort_data+[(str(base/'models'),'models'),(str(base/'assets'),'assets'),(str(base/'THIRD_PARTY'),'THIRD_PARTY')],
-    hiddenimports=mp_hidden+ff_hidden+ort_hidden,
+    binaries=mp_bins+ff_bins+ort_bins+av_bins,
+    datas=mp_data+ff_data+ort_data+av_data+[(str(base/'models'),'models'),(str(base/'assets'),'assets'),(str(base/'THIRD_PARTY'),'THIRD_PARTY')],
+    hiddenimports=mp_hidden+ff_hidden+ort_hidden+av_hidden,
     hookspath=[],hooksconfig={},runtime_hooks=[str(base/'startup_log.py')],
     excludes=['tkinter','pytest','IPython','jupyter','onnx','sounddevice','_sounddevice_data','matplotlib.tests','PySide6.QtWebEngineCore','PySide6.QtWebEngineWidgets','PySide6.QtQml','PySide6.QtQuick'],noarchive=False)
 # Windows supplies its ICU API. A conda/poppler ICU DLL with the same basename
